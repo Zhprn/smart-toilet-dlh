@@ -10,7 +10,6 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
 import { QrisModule } from './qris/qris.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { BriModule } from './bri/bri.module';
-import { BribriQrisServiceTsService } from './bribri-qris.service.ts/bribri-qris.service.ts.service';
 
 @Module({
   imports: [
@@ -32,7 +31,6 @@ import { BribriQrisServiceTsService } from './bribri-qris.service.ts/bribri-qris
       useClass: TransformResponseInterceptor,
     },
     AppService,
-    BribriQrisServiceTsService,
   ],
 })
 export class AppModule {}

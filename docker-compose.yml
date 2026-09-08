@@ -15,4 +15,5 @@ services:
     volumes:
       - ./uploads:/usr/src/app/uploads
       - ./logs:/var/log/gate-qris
+      - ./secrets:/usr/src/app/secrets:ro
     restart: unless-stopped

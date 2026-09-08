@@ -1,41 +1,18 @@
-version: '3.8'
+version: '3.9'
 
 services:
   app:
+    container_name: gate-qris-api
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DATABASE_URL: ${DATABASE_URL}
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/gate-qris?schema=public
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
-      - LOG_FILE_PATH=/var/log/gate-qris/access.log
-    depends_on:
-      - db
-    restart: always
+    env_file:
+      - .env
     volumes:
+      - ./uploads:/usr/src/app/uploads
       - ./logs:/var/log/gate-qris
-    networks:
-      - gate-qris-network
-
-  db:
-    image: postgres:15-alpine
-    restart: always
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=gate-qris
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - gate-qris-network
-
-volumes:
-  postgres_data:
-
-networks:
-  gate-qris-network:
+    restart: unless-stopped

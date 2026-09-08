@@ -32,3 +32,33 @@ model TokenBlacklist {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model Transaction {
+  id                 String    @id @default(uuid())
+  partnerReferenceNo String    @unique
+  referenceNo        String    @unique
+  amount             Decimal   @db.Decimal(10, 2)
+  status             Status
+  qrContent          String
+  terminalId         String
+  createdAt          DateTime  @default(now())
+  paidAt             DateTime?
+  expiredAt          DateTime?
+}
+
+enum Status {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+model GateDevices {
+  id              String    @id @default(uuid())
+  name            String
+  deviceCode      String
+  status          String
+  lastConnectedAt DateTime?
+  createdAt       DateTime  @default(now())
+}

@@ -20,6 +20,13 @@ export class ResponseUserDto {
   name: string;
 
   @ApiProperty({
+    example: 'ADMIN',
+    description: 'User role',
+    enum: ['SUPERADMIN', 'ADMIN'],
+  })
+  role: string;
+
+  @ApiProperty({
     example: '2022-01-01T00:00:00.000Z',
     description: 'User creation date',
   })

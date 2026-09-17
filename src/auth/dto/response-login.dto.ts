@@ -20,6 +20,13 @@ export class ResponseLoginDto {
   name: string;
 
   @ApiProperty({
+    example: 'SUPERADMIN',
+    description: 'User role',
+    enum: ['SUPERADMIN', 'ADMIN'],
+  })
+  role: string;
+
+  @ApiProperty({
     example:
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
     description: 'User token',

@@ -6,11 +6,13 @@ import {
   Patch,
   Param,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto, CreateUserSchema } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiCreatedResponse,
   ApiNotFoundResponse,
@@ -18,12 +20,18 @@ import {
 } from '@nestjs/swagger';
 import { ResponseUserDto } from './dto/response-user.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guard/roles.guard';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERADMIN')
+  @ApiBearerAuth()
   @ApiBody({
     description: 'Create a new user',
     schema: {
@@ -31,6 +39,7 @@ export class UserController {
         email: 'admin@gate-qris.com',
         password: 'StrongPassword123!',
         name: 'Admin Gate QRIS',
+        role: 'ADMIN',
       },
     },
   })
@@ -45,6 +54,8 @@ export class UserController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOkResponse({
     description: 'List of users',
     type: [ResponseUserDto],
@@ -57,6 +68,8 @@ export class UserController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOkResponse({
     description: 'User found successfully',
     type: ResponseUserDto,
@@ -69,6 +82,9 @@ export class UserController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERADMIN')
+  @ApiBearerAuth()
   @ApiBody({
     description: 'Update a user',
     schema: {
@@ -76,6 +92,7 @@ export class UserController {
         email: 'admin@gate-qris.com',
         password: 'StrongPassword123!',
         name: 'Admin Gate QRIS',
+        role: 'ADMIN',
       },
     },
   })
@@ -91,6 +108,9 @@ export class UserController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERADMIN')
+  @ApiBearerAuth()
   @ApiOkResponse({
     description: 'User deleted successfully',
     type: ResponseUserDto,

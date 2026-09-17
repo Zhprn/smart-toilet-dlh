@@ -14,11 +14,18 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+}
+
 model User {
   id        String           @id @default(uuid())
   email     String           @unique
   password  String
   name      String
+  address   String?
+  role      UserRole         @default(ADMIN)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   deletedAt DateTime?

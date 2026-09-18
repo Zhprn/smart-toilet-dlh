@@ -69,3 +69,9 @@ model GateDevices {
   lastConnectedAt DateTime?
   createdAt       DateTime  @default(now())
 }
+
+model AppSetting {
+  key       String   @id
+  value     Decimal  @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt
+}

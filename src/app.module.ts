@@ -10,6 +10,7 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
 import { QrisModule } from './qris/qris.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { BriModule } from './bri/bri.module';
+import { AspiModule } from './aspi/aspi.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { BriModule } from './bri/bri.module';
     QrisModule,
     TransactionModule,
     BriModule,
+    AspiModule,
   ],
   controllers: [AppController],
   providers: [

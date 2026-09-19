@@ -3,15 +3,12 @@ import {
   Body,
   Controller,
   Get,
-  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AspiService } from './aspi.service';
 import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { RolesGuard } from '../auth/guard/roles.guard';
 
 @Controller('aspi')
 export class AspiController {
@@ -32,14 +29,29 @@ export class AspiController {
     return this.aspiService.generateQr();
   }
 
-  @Get('transactions')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  findTransactions() {
-    return this.aspiService.findTransactions();
-  }
-
   @Post('notify')
+  @ApiBody({
+    schema: {
+      example: {
+        originalReferenceNo: '202010297777000000009',
+        originalPartnerReferenceNo: '2020102900000000000001',
+        latestTransactionStatus: '00',
+        transactionStatusDesc: 'success',
+        customerNumber: '17081945',
+        accountType: 'tabungan',
+        destinationNumber: '2000020202',
+        destinationAccountName: 'John Doe',
+        amount: { value: '2000.00', currency: 'IDR' },
+        sessionId: 'SESSION001',
+        bankCode: '002',
+        externalStoreId: '310928924949487',
+        additionalInfo: {
+          deviceId: '12345679237',
+          channel: 'mobilephone',
+        },
+      },
+    },
+  })
   notify(@Body() body: Record<string, unknown>) {
     return this.aspiService.handlePaymentNotification(body);
   }
@@ -92,17 +104,4 @@ export class AspiController {
     return this.aspiService.simulatePayment(partnerReferenceNo, status);
   }
 
-  @Get('settings/amount')
-  getQrAmount() {
-    return this.aspiService.getQrAmount();
-  }
-
-  @Patch('settings/amount')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPERADMIN')
-  @ApiBearerAuth()
-  @ApiBody({ schema: { example: { amount: 2000 } } })
-  updateQrAmount(@Body('amount') amount: number) {
-    return this.aspiService.updateQrAmount(Number(amount));
-  }
 }

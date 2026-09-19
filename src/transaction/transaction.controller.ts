@@ -6,8 +6,14 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
+  Res,
+  UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { TransactionService } from './transaction.service';
+import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 
@@ -21,13 +27,28 @@ export class TransactionController {
   }
 
   @Get()
-  findAll() {
-    return this.transactionService.findAll();
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.transactionService.findAll(Number(page), Number(limit));
+  }
+
+  @Get('export')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async exportExcel(@Res() response: Response) {
+    const workbook = await this.transactionService.exportExcel();
+    response.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="transactions.xlsx"',
+    });
+    response.send(workbook);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.transactionService.findOne(+id);
+    return this.transactionService.findOne(id);
   }
 
   @Patch(':id')

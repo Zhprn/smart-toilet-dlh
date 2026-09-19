@@ -3,9 +3,16 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { PrismaService } from '../prisma/prisma.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 
 @Injectable()
 export class BriService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dashboardService: DashboardService,
+  ) {}
+
   private accessToken: string | null = null;
   private accessTokenExpiredAt = 0;
 
@@ -160,12 +167,14 @@ export class BriService {
     const accessToken = await this.getAccessToken();
 
     const timestamp = this.generateTimestamp();
+    const qrAmount = amount > 0 ? amount : await this.dashboardService.getQrAmount();
+    const partnerReferenceNo = `GATE-${Date.now()}`;
 
     const body = {
-      partnerReferenceNo: `GATE-${Date.now()}`,
+      partnerReferenceNo,
 
       amount: {
-        value: amount.toFixed(2),
+        value: qrAmount.toFixed(2),
         currency: 'IDR',
       },
 
@@ -200,7 +209,36 @@ export class BriService {
       },
     });
 
-    return response.data;
+    const responseData = response.data as Record<string, unknown>;
+    const referenceNo =
+      typeof responseData.referenceNo === 'string'
+        ? responseData.referenceNo
+        : '';
+    const qrContent =
+      typeof responseData.qrContent === 'string' ? responseData.qrContent : '';
+
+    if (!referenceNo || !qrContent) {
+      return response.data;
+    }
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        partnerReferenceNo,
+        externalId,
+        referenceNo,
+        amount: qrAmount,
+        status: 'PENDING',
+        qrContent,
+        terminalId: this.terminalId,
+        expiredAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    return {
+      ...responseData,
+      transactionId: transaction.id,
+      transactionStatus: transaction.status,
+    };
   }
 
   async payment(params: {

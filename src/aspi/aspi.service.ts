@@ -8,6 +8,7 @@ import {
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 
 type AccessTokenResponse = {
   accessToken?: string;
@@ -20,10 +21,10 @@ type SignatureAuthResponse = {
 
 @Injectable()
 export class AspiService {
-  private static readonly qrAmountKey = 'QR_AMOUNT';
-  private static readonly defaultQrAmount = 2000;
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dashboardService: DashboardService,
+  ) {}
 
   private accessToken: string | null = null;
   private accessTokenExpiredAt = 0;
@@ -40,6 +41,9 @@ export class AspiService {
   private readonly storeId = process.env.ASPI_STORE_ID ?? 'abcd';
   private readonly terminalId = process.env.ASPI_TERMINAL_ID ?? '213141251124';
   private readonly deviceId = process.env.ASPI_DEVICE_ID ?? '12345679237';
+  private readonly serviceCode = process.env.ASPI_SERVICE_CODE ?? '47';
+  private readonly externalStoreId =
+    process.env.ASPI_EXTERNAL_STORE_ID ?? this.subMerchantId;
 
   generateTimestamp(): string {
     const jakartaTime = new Date(Date.now() + 7 * 60 * 60 * 1000);
@@ -51,28 +55,6 @@ export class AspiService {
       throw new InternalServerErrorException(`${name} is not configured`);
     }
     return value;
-  }
-
-  async getQrAmount(): Promise<number> {
-    const setting = await this.prisma.appSetting.findUnique({
-      where: { key: AspiService.qrAmountKey },
-    });
-
-    return setting ? Number(setting.value) : AspiService.defaultQrAmount;
-  }
-
-  async updateQrAmount(amount: number): Promise<number> {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('QR amount must be greater than zero');
-    }
-
-    const setting = await this.prisma.appSetting.upsert({
-      where: { key: AspiService.qrAmountKey },
-      create: { key: AspiService.qrAmountKey, value: amount },
-      update: { value: amount },
-    });
-
-    return Number(setting.value);
   }
 
   async generateSignatureAuth(timestamp: string): Promise<string> {
@@ -184,7 +166,7 @@ export class AspiService {
     const clientId = this.requireConfig('ASPI_CLIENT_ID', this.clientId);
     const accessToken = await this.getAccessToken();
     const timestamp = this.generateTimestamp();
-    const amount = await this.getQrAmount();
+    const amount = await this.dashboardService.getQrAmount();
     const requestBody = {
       partnerReferenceNo: `${Date.now()}${crypto.randomInt(100000, 999999)}`,
       amount: {
@@ -210,6 +192,7 @@ export class AspiService {
       timestamp,
       requestBody,
     );
+    const externalId = `${Date.now()}${crypto.randomInt(100000, 999999)}`;
 
     const response = await axios.post<Record<string, unknown>>(
       `${baseUrl}/api/v1.0/qr/qr-mpm-generate`,
@@ -221,7 +204,7 @@ export class AspiService {
           'X-TIMESTAMP': timestamp,
           'X-SIGNATURE': signature,
           'X-PARTNER-ID': this.partnerId ?? clientId,
-          'X-EXTERNAL-ID': `${Date.now()}${crypto.randomInt(100000, 999999)}`,
+          'X-EXTERNAL-ID': externalId,
           'CHANNEL-ID': this.requireConfig('ASPI_CHANNEL_ID', this.channelId),
         },
       },
@@ -242,6 +225,7 @@ export class AspiService {
     const transaction = await this.prisma.transaction.create({
       data: {
         partnerReferenceNo: requestBody.partnerReferenceNo,
+        externalId,
         referenceNo,
         amount,
         status: 'PENDING',
@@ -291,21 +275,87 @@ export class AspiService {
       },
     };
 
-    return this.sendSignedQrRequest('/api/v1.0/qr/qr-mpm-payment', body);
+    const paymentResponse = await this.sendSignedQrRequest(
+      '/api/v1.0/qr/qr-mpm-payment',
+      body,
+    );
+    const responseAmount = this.getNestedString(
+      paymentResponse,
+      'amount',
+      'value',
+    );
+    const paymentSucceeded =
+      this.getString(paymentResponse, 'responseCode') === '2005000' &&
+      responseAmount === Number(transaction.amount).toFixed(2);
+
+    if (paymentSucceeded) {
+      await this.prisma.transaction.update({
+        where: { partnerReferenceNo },
+        data: { status: 'SUCCESS', paidAt: new Date() },
+      });
+    }
+
+    return {
+      ...paymentResponse,
+      localTransactionStatus: paymentSucceeded ? 'SUCCESS' : transaction.status,
+      amountMatched: responseAmount === Number(transaction.amount).toFixed(2),
+    };
   }
 
   async query(partnerReferenceNo: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { partnerReferenceNo },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
     const body = {
-      partnerReferenceNo,
+      originalReferenceNo: transaction.referenceNo,
+      originalPartnerReferenceNo: transaction.partnerReferenceNo,
+      originalExternalId:
+        transaction.externalId ?? transaction.partnerReferenceNo,
+      serviceCode: this.serviceCode,
       merchantId: this.merchantId,
-      subMerchantId: this.subMerchantId,
+      externalStoreId: this.externalStoreId,
       additionalInfo: {
         deviceId: this.deviceId,
         channel: this.requireConfig('ASPI_CHANNEL_ID', this.channelId),
       },
     };
 
-    return this.sendSignedQrRequest('/api/v1.0/qr/qr-mpm-query', body);
+    const queryResponse = await this.sendSignedQrRequest(
+      '/api/v1.0/qr/qr-mpm-query',
+      body,
+    );
+
+    const latestTransactionStatus = this.getString(
+      queryResponse,
+      'latestTransactionStatus',
+    );
+    const responseAmount = this.getNestedString(
+      queryResponse,
+      'amount',
+      'value',
+    );
+    const expectedAmount = Number(transaction.amount).toFixed(2);
+
+    if (latestTransactionStatus === '00' && responseAmount === expectedAmount) {
+      await this.prisma.transaction.update({
+        where: { partnerReferenceNo },
+        data: { status: 'SUCCESS', paidAt: new Date() },
+      });
+    }
+
+    return {
+      ...queryResponse,
+      localTransactionStatus:
+        latestTransactionStatus === '00' && responseAmount === expectedAmount
+          ? 'SUCCESS'
+          : transaction.status,
+      amountMatched: responseAmount === expectedAmount,
+    };
   }
 
   private async sendSignedQrRequest(
@@ -342,21 +392,39 @@ export class AspiService {
     return response.data;
   }
 
-  findTransactions() {
-    return this.prisma.transaction.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
   async handlePaymentNotification(payload: Record<string, unknown>) {
-    const partnerReferenceNo = this.getString(payload, 'partnerReferenceNo');
+    const partnerReferenceNo =
+      this.getString(payload, 'originalPartnerReferenceNo') ??
+      this.getString(payload, 'partnerReferenceNo');
     const responseCode = this.getString(payload, 'responseCode');
+    const transactionStatus = this.getString(
+      payload,
+      'latestTransactionStatus',
+    );
+    const transactionStatusDesc = this.getString(
+      payload,
+      'transactionStatusDesc',
+    );
 
     if (!partnerReferenceNo) {
       throw new BadRequestException('partnerReferenceNo is required');
     }
 
-    const status = this.isSuccessfulResponse(responseCode)
+    const existingTransaction = await this.prisma.transaction.findUnique({
+      where: { partnerReferenceNo },
+    });
+
+    if (!existingTransaction) {
+      throw new NotFoundException(
+        `Transaction not found for partnerReferenceNo: ${partnerReferenceNo}`,
+      );
+    }
+
+    const status = this.isSuccessfulResponse(
+      responseCode,
+      transactionStatus,
+      transactionStatusDesc,
+    )
       ? 'SUCCESS'
       : 'FAILED';
     const transaction = await this.prisma.transaction.update({
@@ -394,8 +462,31 @@ export class AspiService {
     return typeof payload[key] === 'string' ? payload[key] : undefined;
   }
 
-  private isSuccessfulResponse(responseCode: string | undefined): boolean {
-    return responseCode === '2004700' || responseCode === '2000000';
+  private getNestedString(
+    payload: Record<string, unknown>,
+    objectKey: string,
+    valueKey: string,
+  ): string | undefined {
+    const nested = payload[objectKey];
+    if (!nested || typeof nested !== 'object') {
+      return undefined;
+    }
+
+    const value = (nested as Record<string, unknown>)[valueKey];
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  private isSuccessfulResponse(
+    responseCode: string | undefined,
+    transactionStatus?: string,
+    transactionStatusDesc?: string,
+  ): boolean {
+    return (
+      responseCode === '2004700' ||
+      responseCode === '2000000' ||
+      transactionStatus === '00' ||
+      transactionStatusDesc?.toLowerCase() === 'success'
+    );
   }
 
   private generateValidityPeriod(): string {

@@ -43,6 +43,7 @@ model TokenBlacklist {
 model Transaction {
   id                 String    @id @default(uuid())
   partnerReferenceNo String    @unique
+  externalId         String?
   referenceNo        String    @unique
   amount             Decimal   @db.Decimal(10, 2)
   status             Status

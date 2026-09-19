@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { AspiService } from './aspi.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 
 jest.mock('axios');
 
@@ -16,6 +17,9 @@ describe('AspiService', () => {
       findMany: jest.fn(),
     },
   };
+  const dashboardService = {
+    getQrAmount: jest.fn(),
+  };
 
   beforeEach(() => {
     process.env.ASPI_BASE_URL = 'https://aspi.test';
@@ -25,6 +29,7 @@ describe('AspiService', () => {
     process.env.ASPI_PRIVATE_KEY = 'dashboard-private-key';
     prisma.appSetting.findUnique.mockResolvedValue({ value: 2000 });
     prisma.appSetting.upsert.mockResolvedValue({ value: 2000 });
+    dashboardService.getQrAmount.mockResolvedValue(2000);
     prisma.transaction.create.mockResolvedValue({
       id: 'transaction-1',
       status: 'PENDING',
@@ -33,7 +38,10 @@ describe('AspiService', () => {
   });
 
   it('generates the ASPI timestamp without milliseconds', () => {
-    const service = new AspiService(prisma as never);
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+    );
 
     expect(service.generateTimestamp()).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/,
@@ -41,7 +49,10 @@ describe('AspiService', () => {
   });
 
   it('gets the signature from ASPI using the dashboard private key', async () => {
-    const service = new AspiService(prisma as never);
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+    );
     const timestamp = '2026-09-18T13:30:00+07:00';
     mockedAxios.post.mockResolvedValueOnce({
       data: { signature: 'signature-1' },
@@ -67,7 +78,10 @@ describe('AspiService', () => {
 
   it('rejects a missing private key before calling ASPI', async () => {
     delete process.env.ASPI_PRIVATE_KEY;
-    const service = new AspiService(prisma as never);
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+    );
 
     await expect(
       service.generateSignatureAuth('2026-09-18T13:30:00+07:00'),
@@ -75,7 +89,10 @@ describe('AspiService', () => {
   });
 
   it('caches an access token until its expiry buffer', async () => {
-    const service = new AspiService(prisma as never);
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+    );
     mockedAxios.post
       .mockResolvedValueOnce({
         data: { signature: 'signature-auth-1' },
@@ -91,7 +108,10 @@ describe('AspiService', () => {
   });
 
   it('uses the same body for signature service and QR generation', async () => {
-    const service = new AspiService(prisma as never);
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+    );
     mockedAxios.post
       .mockResolvedValueOnce({
         data: { signature: 'signature-auth-1' },
@@ -138,15 +158,4 @@ describe('AspiService', () => {
     expect(JSON.stringify(qrRequest)).toBe(JSON.stringify(signatureRequest));
   });
 
-  it('updates the persisted QR amount', async () => {
-    const service = new AspiService(prisma as never);
-    prisma.appSetting.upsert.mockResolvedValueOnce({ value: 2500 });
-
-    await expect(service.updateQrAmount(2500)).resolves.toBe(2500);
-    expect(prisma.appSetting.upsert).toHaveBeenCalledWith({
-      where: { key: 'QR_AMOUNT' },
-      create: { key: 'QR_AMOUNT', value: 2500 },
-      update: { value: 2500 },
-    });
-  });
 });

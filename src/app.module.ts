@@ -11,6 +11,7 @@ import { QrisModule } from './qris/qris.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { BriModule } from './bri/bri.module';
 import { AspiModule } from './aspi/aspi.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AspiModule } from './aspi/aspi.module';
     TransactionModule,
     BriModule,
     AspiModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

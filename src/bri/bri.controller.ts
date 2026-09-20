@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
 import { BriService } from './bri.service';
 
 @Controller('bri')
@@ -6,8 +6,26 @@ export class BriController {
   constructor(private readonly briService: BriService) {}
 
   @Post('generate-qr')
-  async generateQR(@Body('amount') amount: number) {
-    return this.briService.generateQR(Number(amount));
+  async generateQR() {
+    return this.briService.generateQR();
+  }
+
+  @Get('token')
+  getToken() {
+    return this.briService.getAccessToken();
+  }
+
+  @Post('inquiry')
+  inquiry(@Body('partnerReferenceNo') partnerReferenceNo: string) {
+    return this.briService.inquiry(partnerReferenceNo);
+  }
+
+  @Post('qris/notify')
+  notify(
+    @Body() body: Record<string, unknown>,
+    @Headers('x-signature') signature?: string,
+  ) {
+    return this.briService.handleNotification(body, signature);
   }
 
   @Post('payment')
@@ -15,14 +33,10 @@ export class BriController {
     @Body()
     body: {
       partnerReferenceNo: string;
-      amount: number;
       otp: string;
       verificationId: string;
     },
   ) {
-    return this.briService.payment({
-      ...body,
-      amount: Number(body.amount),
-    });
+    return this.briService.payment(body);
   }
 }

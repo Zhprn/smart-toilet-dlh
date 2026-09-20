@@ -1,16 +1,22 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import axios from 'axios';
 import * as crypto from 'crypto';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { GateService } from '../gate/gate.service';
 
 @Injectable()
 export class BriService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dashboardService: DashboardService,
+    private readonly gateService: GateService,
   ) {}
 
   private accessToken: string | null = null;
@@ -28,6 +34,7 @@ export class BriService {
   private readonly terminalId = process.env.BRI_TERMINAL_ID!;
 
   private readonly privateKey = process.env.BRI_PRIVATE_KEY!;
+  private readonly webhookSecret = process.env.BRI_WEBHOOK_SECRET;
 
   /**
    * Generate timestamp ISO 8601
@@ -58,7 +65,7 @@ export class BriService {
    * Token tidak perlu dibuat setiap request.
    * Kita cache sampai mendekati expired.
    */
-  private async getAccessToken(): Promise<string> {
+  async getAccessToken(): Promise<string> {
     const now = Date.now();
 
     // Buffer 30 detik sebelum expired
@@ -161,13 +168,13 @@ export class BriService {
   /**
    * Generate QR MPM Dynamic
    */
-  async generateQR(amount: number) {
+  async generateQR() {
     const endpoint = '/api/v1.0/qr/qr-mpm-generate';
 
     const accessToken = await this.getAccessToken();
 
     const timestamp = this.generateTimestamp();
-    const qrAmount = amount > 0 ? amount : await this.dashboardService.getQrAmount();
+    const qrAmount = await this.dashboardService.getQrAmount();
     const partnerReferenceNo = `GATE-${Date.now()}`;
 
     const body = {
@@ -241,12 +248,177 @@ export class BriService {
     };
   }
 
+  async inquiry(partnerReferenceNo: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { partnerReferenceNo },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    const endpoint = '/api/v1.0/qr/qr-mpm-query';
+    const accessToken = await this.getAccessToken();
+    const timestamp = this.generateTimestamp();
+    const body = {
+      originalReferenceNo: transaction.referenceNo,
+      originalPartnerReferenceNo: transaction.partnerReferenceNo,
+      terminalId: transaction.terminalId,
+    };
+    const signature = this.generateSignature(
+      'POST',
+      endpoint,
+      accessToken,
+      timestamp,
+      body,
+    );
+    const response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
+      headers: this.buildTransactionHeaders(accessToken, timestamp, signature),
+    });
+
+    const responseAmount = this.getAmount(response.data);
+    if (
+      responseAmount !== undefined &&
+      responseAmount !== Number(transaction.amount).toFixed(2)
+    ) {
+      throw new BadRequestException('Inquiry amount does not match transaction');
+    }
+
+    return this.applyPaymentStatus(transaction, response.data);
+  }
+
+  async handleNotification(
+    payload: Record<string, unknown>,
+    signature?: string,
+  ) {
+    this.verifyWebhookSignature(payload, signature);
+
+    const partnerReferenceNo = this.getString(
+      payload,
+      'originalPartnerReferenceNo',
+    );
+    if (!partnerReferenceNo) {
+      throw new BadRequestException('originalPartnerReferenceNo is required');
+    }
+
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { partnerReferenceNo },
+    });
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    const amount = this.getAmount(payload);
+    if (
+      amount !== undefined &&
+      amount !== Number(transaction.amount).toFixed(2)
+    ) {
+      throw new BadRequestException(
+        'Notification amount does not match transaction',
+      );
+    }
+
+    return this.applyPaymentStatus(transaction, payload);
+  }
+
+  private async applyPaymentStatus(
+    transaction: { partnerReferenceNo: string; amount: unknown; status: string },
+    payload: Record<string, unknown>,
+  ) {
+    const statusCode = this.getString(payload, 'latestTransactionStatus');
+    const responseCode = this.getString(payload, 'responseCode');
+    const success = statusCode === '00' || responseCode === '2000000';
+    const failed = ['01', '02', '03', '04', '05'].includes(statusCode ?? '');
+
+    if (!success && !failed) {
+      return { ...payload, localTransactionStatus: transaction.status };
+    }
+
+    const updatedTransaction = await this.prisma.transaction.update({
+      where: { partnerReferenceNo: transaction.partnerReferenceNo },
+      data: {
+        status: success ? 'SUCCESS' : 'FAILED',
+        ...(success ? { paidAt: new Date() } : {}),
+      },
+    });
+    if (success) {
+      await this.gateService.openGate(
+        updatedTransaction.terminalId,
+        updatedTransaction.id,
+      );
+    }
+    return updatedTransaction;
+  }
+
+  private verifyWebhookSignature(
+    payload: Record<string, unknown>,
+    signature?: string,
+  ) {
+    if (!this.webhookSecret) {
+      throw new InternalServerErrorException('BRI_WEBHOOK_SECRET is not configured');
+    }
+    if (!signature) {
+      throw new UnauthorizedException('BRI webhook signature is required');
+    }
+
+    const expected = crypto
+      .createHmac('sha512', this.webhookSecret)
+      .update(JSON.stringify(payload))
+      .digest('base64');
+    const expectedBuffer = Buffer.from(expected);
+    const receivedBuffer = Buffer.from(signature);
+    if (
+      expectedBuffer.length !== receivedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid BRI webhook signature');
+    }
+  }
+
+  private buildTransactionHeaders(
+    accessToken: string,
+    timestamp: string,
+    signature: string,
+  ) {
+    return {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      'X-TIMESTAMP': timestamp,
+      'X-SIGNATURE': signature,
+      'X-PARTNER-ID': this.partnerId,
+      'X-EXTERNAL-ID': this.generateExternalId(),
+      'CHANNEL-ID': this.channelId,
+    };
+  }
+
+  private getString(payload: Record<string, unknown>, key: string) {
+    return typeof payload[key] === 'string' ? payload[key] : undefined;
+  }
+
+  private getAmount(payload: Record<string, unknown>) {
+    const amount = payload.amount;
+    if (!amount || typeof amount !== 'object') {
+      return undefined;
+    }
+    const value = (amount as Record<string, unknown>).value;
+    return typeof value === 'string' || typeof value === 'number'
+      ? Number(value).toFixed(2)
+      : undefined;
+  }
+
   async payment(params: {
     partnerReferenceNo: string;
-    amount: number;
     otp: string;
     verificationId: string;
   }) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { partnerReferenceNo: params.partnerReferenceNo },
+    });
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
     const endpoint = '/api/v1.0/qr/qr-mpm-payment';
 
     const accessToken = await this.getAccessToken();
@@ -259,7 +431,7 @@ export class BriService {
       merchantId: this.merchantId,
 
       amount: {
-        value: params.amount.toFixed(2),
+        value: Number(transaction.amount).toFixed(2),
         currency: 'IDR',
       },
 
@@ -299,6 +471,6 @@ export class BriService {
       },
     });
 
-    return response.data;
+    return this.applyPaymentStatus(transaction, response.data);
   }
 }

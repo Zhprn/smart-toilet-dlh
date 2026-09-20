@@ -12,6 +12,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { BriModule } from './bri/bri.module';
 import { AspiModule } from './aspi/aspi.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { GateModule } from './gate/gate.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     BriModule,
     AspiModule,
     DashboardModule,
+    GateModule,
   ],
   controllers: [AppController],
   providers: [

@@ -29,15 +29,14 @@ describe('BriController', () => {
   });
 
   it('should call generateQR on the service', async () => {
-    await controller.generateQR(100000);
+    await controller.generateQR();
 
-    expect(service.generateQR).toHaveBeenCalledWith(100000);
+    expect(service.generateQR).toHaveBeenCalledWith();
   });
 
   it('should call payment on the service', async () => {
     const payload = {
       partnerReferenceNo: 'GATE-123',
-      amount: 100000,
       otp: '123456',
       verificationId: 'abc-123',
     };

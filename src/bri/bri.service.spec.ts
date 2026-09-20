@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BriService } from './bri.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { GateService } from '../gate/gate.service';
 
 describe('BriService', () => {
   let service: BriService;
@@ -12,6 +13,7 @@ describe('BriService', () => {
         BriService,
         { provide: PrismaService, useValue: {} },
         { provide: DashboardService, useValue: {} },
+        { provide: GateService, useValue: {} },
       ],
     }).compile();
 

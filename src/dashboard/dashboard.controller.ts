@@ -1,16 +1,40 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guard/roles.guard';
+import { GateService } from '../gate/gate.service';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'SUPERADMIN')
 @ApiBearerAuth()
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    private readonly dashboardService: DashboardService,
+    private readonly gateService: GateService,
+  ) {}
+
+  @Get('gates')
+  getGates() {
+    return this.gateService.listDevices();
+  }
+
+  @Post('gates')
+  @ApiBody({
+    schema: {
+      example: { name: 'Main Gate', deviceCode: 'GATE-001' },
+    },
+  })
+  registerGate(@Body('name') name: string, @Body('deviceCode') deviceCode: string) {
+    return this.gateService.registerDevice(name, deviceCode);
+  }
+
+  @Get('summary')
+  getSummary() {
+    return this.dashboardService.getSummary();
+  }
 
   @Get('settings/amount')
   getQrAmount() {

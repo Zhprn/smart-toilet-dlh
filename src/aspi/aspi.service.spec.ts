@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { AspiService } from './aspi.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { GateService } from '../gate/gate.service';
 
 jest.mock('axios');
 
@@ -19,6 +20,9 @@ describe('AspiService', () => {
   };
   const dashboardService = {
     getQrAmount: jest.fn(),
+  };
+  const gateService = {
+    openGate: jest.fn(),
   };
 
   beforeEach(() => {
@@ -41,6 +45,7 @@ describe('AspiService', () => {
     const service = new AspiService(
       prisma as never,
       dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
     );
 
     expect(service.generateTimestamp()).toMatch(
@@ -52,6 +57,7 @@ describe('AspiService', () => {
     const service = new AspiService(
       prisma as never,
       dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
     );
     const timestamp = '2026-09-18T13:30:00+07:00';
     mockedAxios.post.mockResolvedValueOnce({
@@ -81,6 +87,7 @@ describe('AspiService', () => {
     const service = new AspiService(
       prisma as never,
       dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
     );
 
     await expect(
@@ -92,6 +99,7 @@ describe('AspiService', () => {
     const service = new AspiService(
       prisma as never,
       dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
     );
     mockedAxios.post
       .mockResolvedValueOnce({
@@ -111,6 +119,7 @@ describe('AspiService', () => {
     const service = new AspiService(
       prisma as never,
       dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
     );
     mockedAxios.post
       .mockResolvedValueOnce({

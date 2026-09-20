@@ -65,7 +65,8 @@ enum Status {
 model GateDevices {
   id              String    @id @default(uuid())
   name            String
-  deviceCode      String
+  deviceCode      String    @unique
+  authToken       String    @unique @default(uuid())
   status          String
   lastConnectedAt DateTime?
   createdAt       DateTime  @default(now())

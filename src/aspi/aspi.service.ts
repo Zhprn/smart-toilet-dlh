@@ -9,6 +9,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { GateService } from '../gate/gate.service';
 
 type AccessTokenResponse = {
   accessToken?: string;
@@ -24,6 +25,7 @@ export class AspiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dashboardService: DashboardService,
+    private readonly gateService: GateService,
   ) {}
 
   private accessToken: string | null = null;
@@ -289,10 +291,20 @@ export class AspiService {
       responseAmount === Number(transaction.amount).toFixed(2);
 
     if (paymentSucceeded) {
-      await this.prisma.transaction.update({
+      const updatedTransaction = await this.prisma.transaction.update({
         where: { partnerReferenceNo },
         data: { status: 'SUCCESS', paidAt: new Date() },
       });
+      this.gateService.emitPaymentStatus({
+        partnerReferenceNo,
+        transactionId: updatedTransaction.id,
+        status: 'SUCCESS',
+        amount: responseAmount,
+      });
+      await this.gateService.openGate(
+        updatedTransaction.terminalId,
+        updatedTransaction.id,
+      );
     }
 
     return {
@@ -342,10 +354,14 @@ export class AspiService {
     const expectedAmount = Number(transaction.amount).toFixed(2);
 
     if (latestTransactionStatus === '00' && responseAmount === expectedAmount) {
-      await this.prisma.transaction.update({
+      const updatedTransaction = await this.prisma.transaction.update({
         where: { partnerReferenceNo },
         data: { status: 'SUCCESS', paidAt: new Date() },
       });
+      await this.gateService.openGate(
+        updatedTransaction.terminalId,
+        updatedTransaction.id,
+      );
     }
 
     return {

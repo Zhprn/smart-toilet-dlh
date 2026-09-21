@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, EyeOff, User, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
+import { authService } from "@/services/auth.service";
 
 export const Route = createFileRoute("/login")({
   component: LoginComponent,
@@ -8,18 +9,33 @@ export const Route = createFileRoute("/login")({
 
 function LoginComponent() {
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState("198402122009011004");
-  const [password, setPassword] = useState("687280");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate({ to: "/dashboard" });
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    try {
+      await authService.login({ email, password });
+      navigate({ to: "/dashboard" });
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message || "Email atau kata sandi salah. Silakan coba lagi."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="flex h-screen w-full items-center justify-center overflow-hidden bg-[#E5E7EB] p-2 sm:p-4 lg:p-6">
       <div className="flex h-full max-h-[96vh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-[2.5rem] lg:h-[88vh] lg:max-h-[760px]">
+        {/* Sisi Kiri - Banner Biru */}
         <div className="relative hidden h-full w-1/2 flex-col justify-between overflow-hidden bg-[#1D408C] p-6 text-white lg:flex lg:p-8 xl:p-10">
           <img
             src="/images/bg-pattern.svg"
@@ -43,10 +59,10 @@ function LoginComponent() {
               />
             </div>
 
-            <h1 className="mt-3 text-lg font-bold tracking-wider uppercase text-center xl:mt-4 xl:text-xl">
+            <h1 className="mt-3 text-center text-lg font-bold uppercase tracking-wider xl:mt-4 xl:text-xl">
               PORTAL PETUGAS DLH
             </h1>
-            <p className="mt-1 text-[11px] text-blue-100/90 font-light text-center xl:text-xs">
+            <p className="mt-1 text-center text-[11px] font-light text-blue-100/90 xl:text-xs">
               Sistem Pemantauan Retribusi Smart Toilet Kota Padang
             </p>
 
@@ -55,7 +71,7 @@ function LoginComponent() {
                 src="/images/mockup-priview.svg"
                 alt="Mockup Diagram Pendapatan"
                 draggable={false}
-                className="select-none w-full max-h-[38vh] object-contain drop-shadow-2xl"
+                className="max-h-[38vh] w-full select-none object-contain drop-shadow-2xl"
               />
             </div>
           </div>
@@ -65,6 +81,7 @@ function LoginComponent() {
           </div>
         </div>
 
+        {/* Sisi Kanan - Form Login */}
         <div className="flex h-full w-full flex-col justify-center overflow-y-auto px-6 py-6 sm:px-10 md:px-12 lg:w-1/2 lg:overflow-hidden lg:px-12 xl:px-16">
           <div className="mx-auto w-full max-w-md">
             <div className="mb-4 xl:mb-6">
@@ -85,30 +102,39 @@ function LoginComponent() {
               <h1 className="mt-4 text-xl font-bold text-gray-900 sm:text-2xl xl:mt-6">
                 Dashboard Smart Toilet
               </h1>
-              <p className="text-xs text-gray-500">Dinas Lingkungan Hidup Kota Padang</p>
+              <p className="text-xs text-gray-500">
+                Dinas Lingkungan Hidup Kota Padang
+              </p>
               <p className="mt-2 text-xs font-semibold text-[#1D408C] xl:mt-3">
                 Masuk ke Akun Anda
               </p>
             </div>
 
+            {/* Alert Error */}
+            {errorMessage && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600">
+                {errorMessage}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-3.5 xl:space-y-4">
               <div>
                 <label
-                  htmlFor="identifier"
+                  htmlFor="email"
                   className="mb-1 block text-xs font-medium text-gray-600"
                 >
-                  NIP atau Email Kedinasan
+                  Email Kedinasan
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
-                    <User className="h-4 w-4" />
+                    <Mail className="h-4 w-4" />
                   </div>
                   <input
-                    id="identifier"
-                    type="text"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Masukkan NIP atau Email"
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nama@dlh.padang.go.id"
                     className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-xs text-gray-900 focus:border-[#1D408C] focus:outline-none focus:ring-1 focus:ring-[#1D408C]"
                     required
                   />
@@ -151,12 +177,13 @@ function LoginComponent() {
 
               <button
                 type="submit"
-                className="mt-2 w-full rounded-lg bg-[#1D408C] py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#163370] active:scale-[0.99] xl:py-3"
+                disabled={isLoading}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#1D408C] py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#163370] active:scale-[0.99] disabled:opacity-60 xl:py-3"
               >
-                Masuk Ke Dashboard
+                {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>{isLoading ? "Memproses..." : "Masuk Ke Dashboard"}</span>
               </button>
             </form>
-
           </div>
         </div>
       </div>

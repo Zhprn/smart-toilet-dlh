@@ -7,14 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { LayoutDashboard, ReceiptText, Menu, X } from "lucide-react";
 
-type NavItem = {
-  title: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  exact?: boolean;
-};
-
-const primaryNav: NavItem[] = [
+const primaryNav = [
   {
     title: "Dashboard",
     href: "/dashboard",
@@ -35,9 +28,28 @@ export function DashboardLayout() {
     select: (state) => state.location.pathname,
   });
 
+  const [user, setUser] = React.useState<{ name?: string; role?: string } | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("user-data");
+      if (raw) {
+        setUser(JSON.parse(raw));
+      }
+    } catch {
+      // ignore JSON parse error
+    }
+  }, []);
+
   const handleLogout = () => {
+    localStorage.removeItem("auth-token");
+    localStorage.removeItem("user-data");
     navigate({ to: "/login" });
   };
+
+  const displayName = user?.name || "ADMIN GATE QRIS";
+  const displayRole = user?.role || "ADMIN";
+  const initialLetter = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen w-full bg-white">
@@ -124,17 +136,18 @@ export function DashboardLayout() {
             })}
           </nav>
         </div>
+
         <div className="border-t border-white/10 pt-5">
           <div className="flex items-center gap-3 px-1">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-[#1D408C] shadow-sm">
-              A
+              {initialLetter}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold uppercase tracking-wider text-white">
-                ADMIN DPH
+                {displayName}
               </p>
               <p className="truncate text-[11px] text-blue-200">
-                Smart Toilet Pantai Padang
+                {displayRole}
               </p>
             </div>
           </div>
@@ -149,7 +162,7 @@ export function DashboardLayout() {
         </div>
       </aside>
 
-      <main className="min-h-screen bg-white p-4 transition-all duration-300 sm:p-6 lg:ml-72 lg:p-8">
+      <main className="min-h-screen bg-white p-4 sm:p-6 lg:ml-72 lg:p-8">
         <Outlet />
       </main>
     </div>

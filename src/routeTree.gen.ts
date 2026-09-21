@@ -13,6 +13,7 @@ import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedManagementUserIndexRouteImport } from './routes/_authenticated/management-user/index'
 import { Route as AuthenticatedLogPendapatanIndexRouteImport } from './routes/_authenticated/log-pendapatan/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 
@@ -35,6 +36,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedManagementUserIndexRoute =
+  AuthenticatedManagementUserIndexRouteImport.update({
+    id: '/management-user/',
+    path: '/management-user/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLogPendapatanIndexRoute =
   AuthenticatedLogPendapatanIndexRouteImport.update({
     id: '/log-pendapatan/',
@@ -54,6 +61,7 @@ export interface FileRoutesByFullPath {
   '/payment': typeof PaymentRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/log-pendapatan': typeof AuthenticatedLogPendapatanIndexRoute
+  '/management-user': typeof AuthenticatedManagementUserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -61,6 +69,7 @@ export interface FileRoutesByTo {
   '/payment': typeof PaymentRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/log-pendapatan': typeof AuthenticatedLogPendapatanIndexRoute
+  '/management-user': typeof AuthenticatedManagementUserIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -70,12 +79,25 @@ export interface FileRoutesById {
   '/payment': typeof PaymentRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/log-pendapatan/': typeof AuthenticatedLogPendapatanIndexRoute
+  '/_authenticated/management-user/': typeof AuthenticatedManagementUserIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/payment' | '/dashboard' | '/log-pendapatan'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/payment'
+    | '/dashboard'
+    | '/log-pendapatan'
+    | '/management-user'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/payment' | '/dashboard' | '/log-pendapatan'
+  to:
+    | '/'
+    | '/login'
+    | '/payment'
+    | '/dashboard'
+    | '/log-pendapatan'
+    | '/management-user'
   id:
     | '__root__'
     | '/'
@@ -84,6 +106,7 @@ export interface FileRouteTypes {
     | '/payment'
     | '/_authenticated/dashboard/'
     | '/_authenticated/log-pendapatan/'
+    | '/_authenticated/management-user/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -123,6 +146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/management-user/': {
+      id: '/_authenticated/management-user/'
+      path: '/management-user'
+      fullPath: '/management-user'
+      preLoaderRoute: typeof AuthenticatedManagementUserIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/log-pendapatan/': {
       id: '/_authenticated/log-pendapatan/'
       path: '/log-pendapatan'
@@ -143,11 +173,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedLogPendapatanIndexRoute: typeof AuthenticatedLogPendapatanIndexRoute
+  AuthenticatedManagementUserIndexRoute: typeof AuthenticatedManagementUserIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedLogPendapatanIndexRoute: AuthenticatedLogPendapatanIndexRoute,
+  AuthenticatedManagementUserIndexRoute: AuthenticatedManagementUserIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

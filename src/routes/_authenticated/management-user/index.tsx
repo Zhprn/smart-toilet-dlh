@@ -1,0 +1,316 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState, useCallback } from "react";
+import {
+  UserPlus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Users,
+  X,
+  AlertCircle,
+} from "lucide-react";
+import { userService } from "@/services/user.service";
+import type { UserItem } from "@/services/user.service";
+
+export const Route = createFileRoute("/_authenticated/management-user/")({
+  component: ManagementUserComponent,
+});
+
+function ManagementUserComponent() {
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "ADMIN",
+  });
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+      const res = await userService.getUsers();
+      const raw = res.data as any;
+      const list = raw?.data?.data || raw?.data || raw || [];
+      setUsers(Array.isArray(list) ? list : []);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setErrorMsg(error.message || "Gagal memuat daftar pengguna.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const handleOpenModal = (user?: UserItem) => {
+    if (user) {
+      setSelectedUser(user);
+      setFormData({
+        name: user.name,
+        email: user.email,
+        password: "",
+        role: user.role || "ADMIN",
+      });
+    } else {
+      setSelectedUser(null);
+      setFormData({
+        name: "",
+        email: "",
+        password: "",
+        role: "ADMIN",
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedUser(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSubmitting(true);
+      if (selectedUser) {
+        const payload: Record<string, string> = {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+        };
+        if (formData.password) {
+          payload.password = formData.password;
+        }
+        await userService.updateUser(selectedUser.id, payload);
+      } else {
+        await userService.createUser({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+        });
+      }
+      handleCloseModal();
+      fetchUsers();
+    } catch (err: any) {
+      alert("Gagal menyimpan pengguna: " + (err?.response?.data?.message || err.message));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Yakin ingin menghapus user ${name}?`)) return;
+    try {
+      await userService.deleteUser(id);
+      fetchUsers();
+    } catch (err: any) {
+      alert("Gagal menghapus user: " + (err?.response?.data?.message || err.message));
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+            Manajemen Pengguna
+          </h1>
+          <p className="text-xs text-gray-500 sm:text-sm">
+            Kelola data akun administrator dan staf sistem Smart Toilet
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleOpenModal()}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1D408C] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#16326e] active:scale-95"
+        >
+          <UserPlus className="h-4 w-4" />
+          <span>Tambah Pengguna</span>
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-gray-100 bg-gray-50/75 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-5 py-3.5">Nama</th>
+                <th className="px-5 py-3.5">Email</th>
+                <th className="px-5 py-3.5 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-gray-400">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#1D408C]" />
+                    <span className="mt-2 block text-xs">Memuat data pengguna...</span>
+                  </td>
+                </tr>
+              ) : errorMsg ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-rose-500">
+                    <AlertCircle className="mx-auto h-6 w-6" />
+                    <span className="mt-2 block text-xs">{errorMsg}</span>
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-gray-400">
+                    <Users className="mx-auto h-8 w-8 text-gray-300" />
+                    <span className="mt-2 block text-xs">Belum ada data pengguna</span>
+                  </td>
+                </tr>
+              ) : (
+                users.map((item) => (
+                  <tr key={item.id} className="transition hover:bg-gray-50/50">
+                    <td className="px-5 py-4 font-semibold text-gray-900">
+                      {item.name}
+                    </td>
+                    <td className="px-5 py-4 font-mono text-gray-600">
+                      {item.email}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenModal(item)}
+                          className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-[#1D408C]"
+                          title="Edit Pengguna"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.id, item.name)}
+                          className="rounded-lg p-1.5 text-gray-500 transition hover:bg-rose-50 hover:text-rose-600"
+                          title="Hapus Pengguna"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl transition-all">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h2 className="text-base font-bold text-gray-900">
+                {selectedUser ? "Edit Pengguna" : "Tambah Pengguna Baru"}
+              </h2>
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="mb-1 block font-medium text-gray-700">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Username"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-gray-700">
+                  Alamat Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  placeholder="email@gmail.com"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-gray-700">
+                  Password {selectedUser && "(Kosongkan jika tidak diubah)"}
+                </label>
+                <input
+                  type="password"
+                  required={!selectedUser}
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  placeholder="Password"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-gray-700">
+                  Role Akses
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) =>
+                    setFormData({ ...formData, role: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
+                >
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1D408C] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#16326e] disabled:opacity-50"
+                >
+                  {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>{selectedUser ? "Simpan Perubahan" : "Buat Pengguna"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

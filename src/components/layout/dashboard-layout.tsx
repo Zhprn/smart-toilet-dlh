@@ -5,7 +5,13 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { LayoutDashboard, ReceiptText, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  ReceiptText,
+  Users,
+  Menu,
+  X,
+} from "lucide-react";
 
 const primaryNav = [
   {
@@ -18,6 +24,11 @@ const primaryNav = [
     title: "Log Pendapatan",
     href: "/log-pendapatan",
     icon: ReceiptText,
+  },
+  {
+    title: "Manajemen User",
+    href: "/management-user",
+    icon: Users,
   },
 ];
 
@@ -37,7 +48,6 @@ export function DashboardLayout() {
         setUser(JSON.parse(raw));
       }
     } catch {
-      // ignore JSON parse error
     }
   }, []);
 
@@ -51,11 +61,24 @@ export function DashboardLayout() {
   const displayRole = user?.role || "ADMIN";
   const initialLetter = displayName.charAt(0).toUpperCase();
 
+  const activeNav =
+    primaryNav.find((item) =>
+      item.exact
+        ? pathname === item.href || pathname === `${item.href}/`
+        : pathname.startsWith(item.href)
+    ) || primaryNav[0];
+
+  const ActiveIcon = activeNav.icon;
+
   return (
     <div className="min-h-screen w-full bg-white">
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-100 bg-white px-4 lg:hidden">
         <div className="flex items-center gap-2">
-          <img src="/images/logodlh.svg" alt="Smart Toilet" className="h-7 w-auto object-contain" />
+          <img
+            src="/images/logodlh.svg"
+            alt="Smart Toilet"
+            className="h-7 w-auto object-contain"
+          />
           <span className="text-xs font-bold text-gray-900">Smart Toilet</span>
         </div>
         <button
@@ -162,9 +185,24 @@ export function DashboardLayout() {
         </div>
       </aside>
 
-      <main className="min-h-screen bg-white p-4 sm:p-6 lg:ml-72 lg:p-8">
-        <Outlet />
-      </main>
+      <div className="min-h-screen bg-white lg:ml-72">
+        <header className="hidden h-16 w-full items-center justify-between border-b border-gray-100 bg-white px-8 lg:flex">
+          <div className="flex items-center">
+            <div className="inline-flex items-center gap-2 rounded-full bg-gray-100/80 px-4 py-1.5 text-xs font-semibold text-gray-800 transition-all">
+              <ActiveIcon className="h-4 w-4 text-gray-600" />
+              <span>{activeNav.title}</span>
+            </div>
+          </div>
+
+          <span className="text-xs font-medium text-gray-400">
+            DLH Kota Padang
+          </span>
+        </header>
+
+        <main className="p-4 sm:p-6 lg:p-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

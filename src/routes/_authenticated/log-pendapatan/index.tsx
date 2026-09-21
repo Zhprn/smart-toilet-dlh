@@ -1,185 +1,245 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { ReceiptText, Download, Printer } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import {
+  Download,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ReceiptText,
+} from "lucide-react";
+import {
+  transactionService,
+  type TransactionItem,
+  type TransactionMeta,
+} from "@/services/transaction.service";
 
 export const Route = createFileRoute("/_authenticated/log-pendapatan/")({
   component: LogPendapatanComponent,
 });
 
-type TransactionStatus = "berhasil" | "gagal" | "pending";
-
-interface Transaction {
-  id: number;
-  tanggal: string;
-  waktu: string;
-  metode: string;
-  nominal: number;
-  status: TransactionStatus;
-}
-
-const TRANSACTION_DATA: Transaction[] = [
-  { id: 1, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 2, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 3, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 4, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "gagal" },
-  { id: 5, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 6, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 7, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 8, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 9, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "pending" },
-  { id: 10, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 11, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-  { id: 12, tanggal: "2026-09-06", waktu: "09:15", metode: "QRIS", nominal: 2000, status: "berhasil" },
-];
-
 function LogPendapatanComponent() {
-  const [filter, setFilter] = useState<"semua" | TransactionStatus>("semua");
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [meta, setMeta] = useState<TransactionMeta>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  const counts = {
-    semua: TRANSACTION_DATA.length,
-    berhasil: TRANSACTION_DATA.filter((item) => item.status === "berhasil").length,
-    gagal: TRANSACTION_DATA.filter((item) => item.status === "gagal").length,
-    pending: TRANSACTION_DATA.filter((item) => item.status === "pending").length,
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await transactionService.getTransactions(page, limit);
+
+      const raw = res.data as any;
+      const payload = raw?.data?.data ? raw.data : raw;
+
+      const list: TransactionItem[] = payload?.data || [];
+      const pagination: TransactionMeta = payload?.meta || {
+        page,
+        limit,
+        total: list.length,
+        totalPages: Math.ceil(list.length / limit) || 1,
+      };
+
+      setTransactions(list);
+      setMeta(pagination);
+    } catch (err) {
+      console.error("Gagal memuat log transaksi:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const blob = await transactionService.exportTransactions();
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "transactions.xlsx";
+      document.body.appendChild(link);
+      link.click();
+
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error("Gagal mendownload laporan:", err);
+      alert("Gagal mendownload file laporan transaksi. Pastikan sesi login aktif.");
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const filteredData = filter === "semua"
-    ? TRANSACTION_DATA
-    : TRANSACTION_DATA.filter((item) => item.status === filter);
+  const formatRupiah = (value: string | number) => {
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(num || 0);
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleString("id-ID", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
-        <div className="flex items-center gap-2 rounded-xl bg-gray-100/80 px-3.5 py-1.5 text-xs font-semibold text-gray-700">
-          <ReceiptText className="h-4 w-4 text-gray-600" />
-          <span>Log Pendapatan</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-xl bg-[#1D408C] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#163370]"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Eksport</span>
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100"
-          >
-            <Printer className="h-3.5 w-3.5 text-gray-600" />
-            <span>Print</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Log Pendapatan</h1>
-          <p className="mt-0.5 text-xs text-gray-400">
-            Riwayat seluruh transaksi pembayaran QRIS
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+            Log Pendapatan Retribusi
+          </h1>
+          <p className="text-xs text-gray-500 sm:text-sm">
+            Catatan seluruh transaksi retribusi masuk melalui QRIS gate
           </p>
         </div>
 
-        <div className="sm:text-right">
-          <p className="text-xs text-gray-400">Total Pendapatan</p>
-          <p className="text-xl font-bold text-[#1D408C] sm:text-2xl">Rp 20.000</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         <button
           type="button"
-          onClick={() => setFilter("semua")}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-            filter === "semua"
-              ? "bg-[#1D408C] text-white"
-              : "border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
+          onClick={handleExport}
+          disabled={exporting || loading}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1D408C] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#16326e] active:scale-95 disabled:opacity-50"
         >
-          Semua
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilter("berhasil")}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-            filter === "berhasil"
-              ? "bg-[#1D408C] text-white"
-              : "border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          Berhasil ({counts.berhasil})
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilter("gagal")}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-            filter === "gagal"
-              ? "bg-[#1D408C] text-white"
-              : "border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          Gagal ({counts.gagal})
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilter("pending")}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-            filter === "pending"
-              ? "bg-[#1D408C] text-white"
-              : "border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          Pending ({counts.pending})
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          <span>{exporting ? "Mengunduh..." : "Export Laporan"}</span>
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
-        <table className="min-w-[640px] w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-400 font-medium">
-              <th className="py-3.5 pl-4 font-medium">No</th>
-              <th className="py-3.5 font-medium">Tanggal</th>
-              <th className="py-3.5 font-medium">Waktu</th>
-              <th className="py-3.5 font-medium">Metode</th>
-              <th className="py-3.5 font-medium">Nominal</th>
-              <th className="py-3.5 pr-4 text-right font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filteredData.map((item, index) => (
-              <tr key={item.id} className="hover:bg-gray-50/60 transition-colors">
-                <td className="py-4 pl-4 font-medium text-gray-400">{index + 1}</td>
-                <td className="py-4 font-semibold text-gray-900">{item.tanggal}</td>
-                <td className="py-4 text-gray-500">{item.waktu}</td>
-                <td className="py-4 text-gray-500">{item.metode}</td>
-                <td className="py-4 font-bold text-gray-900">
-                  Rp {item.nominal.toLocaleString("id-ID")}
-                </td>
-                <td className="py-4 pr-4 text-right">
-                  {item.status === "berhasil" && (
-                    <span className="inline-block rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-600">
-                      Berhasil
-                    </span>
-                  )}
-                  {item.status === "gagal" && (
-                    <span className="inline-block rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-500">
-                      Gagal
-                    </span>
-                  )}
-                  {item.status === "pending" && (
-                    <span className="inline-block rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-600">
-                      Pending
-                    </span>
-                  )}
-                </td>
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-gray-100 bg-gray-50/75 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-5 py-3.5">Ref No / Partner Ref</th>
+                <th className="px-5 py-3.5">Terminal ID</th>
+                <th className="px-5 py-3.5">Nominal</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5">Waktu Dibuat</th>
+                <th className="px-5 py-3.5">Waktu Bayar</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#1D408C]" />
+                    <span className="mt-2 block text-xs">Memuat data transaksi...</span>
+                  </td>
+                </tr>
+              ) : transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                    <ReceiptText className="mx-auto h-8 w-8 text-gray-300" />
+                    <span className="mt-2 block text-xs">Belum ada riwayat transaksi</span>
+                  </td>
+                </tr>
+              ) : (
+                transactions.map((tx) => (
+                  <tr key={tx.id} className="transition hover:bg-gray-50/50">
+                    <td className="px-5 py-4">
+                      <p className="font-mono font-medium text-gray-900">
+                        {tx.partnerReferenceNo}
+                      </p>
+                      <p className="font-mono text-[10px] text-gray-400">
+                        Ref: {tx.referenceNo}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 font-mono text-gray-600">
+                      {tx.terminalId || "-"}
+                    </td>
+                    <td className="px-5 py-4 font-semibold text-gray-900">
+                      {formatRupiah(tx.amount)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                          tx.status === "SUCCESS"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : tx.status === "PENDING"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-rose-50 text-rose-700"
+                        }`}
+                      >
+                        {tx.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-gray-500">
+                      {formatDate(tx.createdAt)}
+                    </td>
+                    <td className="px-5 py-4 text-gray-500">
+                      {formatDate(tx.paidAt)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <div className="pt-1 text-xs text-gray-400">
-        Menampilkan {filteredData.length} dari {TRANSACTION_DATA.length} transaksi
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 px-5 py-4 sm:flex-row">
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <span>Tampilkan</span>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value));
+                setPage(1);
+              }}
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 focus:border-[#1D408C] focus:outline-none"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>data dari total {meta.total} transaksi</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">
+              Halaman {meta.page} dari {meta.totalPages || 1}
+            </span>
+
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                disabled={page <= 1 || loading}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.min(prev + 1, meta.totalPages))}
+                disabled={page >= meta.totalPages || loading}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

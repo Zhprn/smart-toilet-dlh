@@ -6,12 +6,11 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY prisma.config.ts ./prisma.config.ts
 
-RUN npm install
+RUN npm install --ignore-scripts
 
 COPY . .
 
-RUN npx prisma generate
-RUN npx prisma migrate deploy
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npx prisma generate
 
 RUN npm run build
 
@@ -27,4 +26,4 @@ COPY --from=builder /usr/src/app/generated ./dist/generated
 COPY --from=builder /usr/src/app/prisma.config.ts ./prisma.config.ts
 
 EXPOSE 3000
-CMD [ "npm", "run", "start:prod" ]
+CMD [ "sh", "-c", "npx prisma migrate deploy && npm run start:prod" ]

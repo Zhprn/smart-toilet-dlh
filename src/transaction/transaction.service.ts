@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { Status } from '../../generated/prisma/enums';
 import * as XLSX from 'xlsx';
 
 @Injectable()
@@ -12,16 +17,20 @@ export class TransactionService {
     return 'This action adds a new transaction';
   }
 
-  async findAll(page = 1, limit = 20) {
+  async findAll(page = 1, limit = 20, status?: string) {
     const safePage = Math.max(1, Number(page) || 1);
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+    const transactionStatus = this.parseStatus(status);
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
+        where: transactionStatus ? { status: transactionStatus } : undefined,
         orderBy: { createdAt: 'desc' },
         skip: (safePage - 1) * safeLimit,
         take: safeLimit,
       }),
-      this.prisma.transaction.count(),
+      this.prisma.transaction.count({
+        where: transactionStatus ? { status: transactionStatus } : undefined,
+      }),
     ]);
 
     return {
@@ -33,6 +42,18 @@ export class TransactionService {
         totalPages: Math.ceil(total / safeLimit),
       },
     };
+  }
+
+  private parseStatus(status?: string): Status | undefined {
+    if (!status) return undefined;
+
+    if (Object.values(Status).includes(status as Status)) {
+      return status as Status;
+    }
+
+    throw new BadRequestException(
+      `Invalid status. Use one of: ${Object.values(Status).join(', ')}`,
+    );
   }
 
   async exportExcel() {

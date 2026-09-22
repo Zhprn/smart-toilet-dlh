@@ -29,8 +29,16 @@ export class TransactionController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
-    return this.transactionService.findAll(Number(page), Number(limit));
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.transactionService.findAll(
+      Number(page),
+      Number(limit),
+      status,
+    );
   }
 
   @Get('export')

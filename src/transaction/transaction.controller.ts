@@ -10,8 +10,9 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { Status } from '../../generated/prisma/enums';
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
@@ -29,6 +30,12 @@ export class TransactionController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: Object.values(Status),
+    description: 'Filter transactions by local payment status',
+  })
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,

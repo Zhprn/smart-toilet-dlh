@@ -15,7 +15,7 @@ import {
   dashboardService,
   type DashboardSummaryData,
 } from "@/services/dashboard.service";
-
+import { formatDateIndo } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: DashboardComponent,
 });
@@ -77,7 +77,7 @@ function DashboardComponent() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-6 p-2 md:p-4">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
           Dashboard Smart Toilet
@@ -247,10 +247,7 @@ function DashboardComponent() {
                         {device.status}
                       </span>
                       <p className="mt-1 text-[9px] text-gray-400">
-                        {new Date(device.lastConnectedAt).toLocaleDateString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatDateIndo(device.lastConnectedAt)}
                       </p>
                     </div>
                   </div>

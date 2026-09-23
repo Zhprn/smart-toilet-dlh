@@ -78,7 +78,7 @@ export const dashboardService = {
   },
 
   updateAmountSetting: async (payload: SettingsAmountPayload) => {
-    return apiClient.post<{ success: boolean; message: string; data?: SettingsAmountData }>(
+    return apiClient.patch<{ success: boolean; message: string; data?: SettingsAmountData }>(
       "/dashboard/settings/amount",
       { amount: Number(payload.amount) }
     );

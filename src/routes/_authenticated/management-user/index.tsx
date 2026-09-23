@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import {
   UserPlus,
@@ -9,10 +9,23 @@ import {
   X,
   AlertCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { userService } from "@/services/user.service";
 import type { UserItem } from "@/services/user.service";
 
+
 export const Route = createFileRoute("/_authenticated/management-user/")({
+  beforeLoad: ({ context }) => {
+    const userRole =
+      (context as any)?.auth?.user?.role ||
+      JSON.parse(localStorage.getItem("user-data") || "{}")?.role;
+
+    if (userRole?.toUpperCase() !== "SUPERADMIN") {
+      throw redirect({
+        to: "/dashboard",
+      });
+    }
+  },
   component: ManagementUserComponent,
 });
 
@@ -24,6 +37,9 @@ function ManagementUserComponent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+
+  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -43,6 +59,7 @@ function ManagementUserComponent() {
     } catch (err: unknown) {
       const error = err as Error;
       setErrorMsg(error.message || "Gagal memuat daftar pengguna.");
+      toast.error("Gagal memuat daftar pengguna");
     } finally {
       setLoading(false);
     }
@@ -92,6 +109,7 @@ function ManagementUserComponent() {
           payload.password = formData.password;
         }
         await userService.updateUser(selectedUser.id, payload);
+        toast.success("Pengguna berhasil diperbarui");
       } else {
         await userService.createUser({
           name: formData.name,
@@ -99,28 +117,38 @@ function ManagementUserComponent() {
           password: formData.password,
           role: formData.role,
         });
+        toast.success("Pengguna baru berhasil ditambahkan");
       }
       handleCloseModal();
       fetchUsers();
     } catch (err: any) {
-      alert("Gagal menyimpan pengguna: " + (err?.response?.data?.message || err.message));
+      toast.error(
+        "Gagal menyimpan pengguna: " + (err?.response?.data?.message || err.message)
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Yakin ingin menghapus user ${name}?`)) return;
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
     try {
-      await userService.deleteUser(id);
+      setDeleting(true);
+      await userService.deleteUser(userToDelete.id);
+      toast.success(`Pengguna ${userToDelete.name} berhasil dihapus`);
+      setUserToDelete(null);
       fetchUsers();
     } catch (err: any) {
-      alert("Gagal menghapus user: " + (err?.response?.data?.message || err.message));
+      toast.error(
+        "Gagal menghapus pengguna: " + (err?.response?.data?.message || err.message)
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-6 p-2 md:p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
@@ -154,21 +182,21 @@ function ManagementUserComponent() {
             <tbody className="divide-y divide-gray-100 text-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-gray-400">
+                  <td colSpan={3} className="py-12 text-center text-gray-400">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#1D408C]" />
                     <span className="mt-2 block text-xs">Memuat data pengguna...</span>
                   </td>
                 </tr>
               ) : errorMsg ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-rose-500">
+                  <td colSpan={3} className="py-12 text-center text-rose-500">
                     <AlertCircle className="mx-auto h-6 w-6" />
                     <span className="mt-2 block text-xs">{errorMsg}</span>
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-gray-400">
+                  <td colSpan={3} className="py-12 text-center text-gray-400">
                     <Users className="mx-auto h-8 w-8 text-gray-300" />
                     <span className="mt-2 block text-xs">Belum ada data pengguna</span>
                   </td>
@@ -194,7 +222,7 @@ function ManagementUserComponent() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(item.id, item.name)}
+                          onClick={() => setUserToDelete({ id: item.id, name: item.name })}
                           className="rounded-lg p-1.5 text-gray-500 transition hover:bg-rose-50 hover:text-rose-600"
                           title="Hapus Pengguna"
                         >
@@ -308,6 +336,43 @@ function ManagementUserComponent() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-rose-50 p-2 text-rose-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus</h3>
+                <p className="text-xs text-gray-500">
+                  Yakin ingin menghapus akun <span className="font-semibold text-gray-800">{userToDelete.name}</span>?
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setUserToDelete(null)}
+                className="rounded-xl px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>Hapus Pengguna</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

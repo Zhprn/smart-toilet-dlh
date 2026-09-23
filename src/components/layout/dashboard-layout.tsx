@@ -11,9 +11,18 @@ import {
   Users,
   Menu,
   X,
+  Settings,
 } from "lucide-react";
 
-const primaryNav = [
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ElementType;
+  exact?: boolean;
+  roles?: string[];
+}
+
+const primaryNav: NavItem[] = [
   {
     title: "Dashboard",
     href: "/dashboard",
@@ -29,6 +38,12 @@ const primaryNav = [
     title: "Manajemen User",
     href: "/management-user",
     icon: Users,
+    roles: ["SUPERADMIN"],
+  },
+  {
+    title: "Settings",
+    href: "/settings",
+    icon: Settings,
   },
 ];
 
@@ -61,12 +76,17 @@ export function DashboardLayout() {
   const displayRole = user?.role || "ADMIN";
   const initialLetter = displayName.charAt(0).toUpperCase();
 
+  const filteredNav = primaryNav.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(displayRole.toUpperCase());
+  });
+
   const activeNav =
-    primaryNav.find((item) =>
+    filteredNav.find((item) =>
       item.exact
         ? pathname === item.href || pathname === `${item.href}/`
         : pathname.startsWith(item.href)
-    ) || primaryNav[0];
+    ) || filteredNav[0] || primaryNav[0];
 
   const ActiveIcon = activeNav.icon;
 
@@ -130,7 +150,7 @@ export function DashboardLayout() {
           </div>
 
           <nav className="mt-8 space-y-2.5">
-            {primaryNav.map((item) => {
+            {filteredNav.map((item) => {
               const isActive = item.exact
                 ? pathname === item.href || pathname === `${item.href}/`
                 : pathname.startsWith(item.href);

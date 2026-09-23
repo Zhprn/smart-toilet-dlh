@@ -5,7 +5,9 @@ export interface GateDevice {
   name: string;
   deviceCode: string;
   status: "ONLINE" | "OFFLINE" | string;
-  lastConnectedAt: string;
+  lastConnectedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface WeeklyTrendItem {
@@ -35,8 +37,50 @@ export interface DashboardSummaryResponse {
   data: DashboardSummaryData;
 }
 
+export interface CreateGatePayload {
+  name: string;
+  deviceCode: string;
+}
+
+export interface OpenGatePayload {
+  deviceCode: string;
+  transactionId: string;
+}
+
+export interface SettingsAmountPayload {
+  amount: number;
+}
+
+export interface SettingsAmountData {
+  amount: number;
+  [key: string]: unknown;
+}
+
 export const dashboardService = {
   getSummary: async () => {
     return apiClient.get<DashboardSummaryResponse>("/dashboard/summary");
+  },
+
+  getGates: async () => {
+    return apiClient.get<{ success: boolean; data: GateDevice[] }>("/dashboard/gates");
+  },
+
+  createGate: async (payload: CreateGatePayload) => {
+    return apiClient.post<{ success: boolean; data: GateDevice }>("/dashboard/gates", payload);
+  },
+
+  openGate: async (payload: OpenGatePayload) => {
+    return apiClient.post<{ success: boolean; message: string }>("/dashboard/gate-open", payload);
+  },
+
+  getAmountSetting: async () => {
+    return apiClient.get<{ success: boolean; data: SettingsAmountData }>("/dashboard/settings/amount");
+  },
+
+  updateAmountSetting: async (payload: SettingsAmountPayload) => {
+    return apiClient.post<{ success: boolean; message: string; data?: SettingsAmountData }>(
+      "/dashboard/settings/amount",
+      { amount: Number(payload.amount) }
+    );
   },
 };

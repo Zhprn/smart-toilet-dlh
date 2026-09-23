@@ -1,22 +1,98 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ScanLine, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { io, Socket } from "socket.io-client";
 import { aspiService } from "@/services/aspi.service";
-import { getSocket } from "@/lib/socket";
+import { dashboardService } from "@/services/dashboard.service";
 
 export const Route = createFileRoute("/payment")({
   component: PaymentComponent,
 });
 
+const API_URL = import.meta.env.VITE_API_BASE_URL;
+
 function PaymentComponent() {
   const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingAmount, setLoadingAmount] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [gateStatusText, setGateStatusText] = useState("Pintu gate terbuka otomatis");
+  const [amount, setAmount] = useState<number>(2000);
 
-  const currentPartnerRef = useRef<string>("");
+  const paymentSocketRef = useRef<Socket | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialMount = useRef(false);
+
+  useEffect(() => {
+    const fetchAmount = async () => {
+      try {
+        setLoadingAmount(true);
+        const res = await dashboardService.getAmountSetting();
+        const raw = res.data as any;
+        const val = raw?.data ?? raw;
+        const parsed = typeof val === "number" ? val : val?.amount;
+        if (parsed !== undefined) {
+          setAmount(Number(parsed));
+        }
+      } catch (err) {
+        console.error("Gagal mengambil tarif setting:", err);
+      } finally {
+        setLoadingAmount(false);
+      }
+    };
+
+    fetchAmount();
+  }, []);
+
+  const connectPaymentRealtime = useCallback((partnerReferenceNo: string) => {
+    if (paymentSocketRef.current) {
+      paymentSocketRef.current.disconnect();
+    }
+
+    if (!API_URL) {
+      console.error("VITE_API_URL belum disetel di file .env");
+      setErrorMsg("Konfigurasi API URL belum tersedia.");
+      return;
+    }
+
+    const sanitizedBaseUrl = API_URL.replace(/\/+$/, "");
+
+    const paymentSocket = io(`${sanitizedBaseUrl}/realtime`, {
+      auth: { partnerReferenceNo },
+      transports: ["websocket", "polling"],
+    });
+
+    paymentSocket.on("connect", () => {
+      console.log(`[Socket] Terhubung untuk partnerReferenceNo: ${partnerReferenceNo}`);
+    });
+
+    paymentSocket.on("payment:status", (event: any) => {
+      if (event.partnerReferenceNo !== partnerReferenceNo) return;
+
+      const status = event.status || event.transactionStatus;
+
+      if (status === "SUCCESS") {
+        setIsSuccess(true);
+        setGateStatusText("Pembayaran berhasil dikonfirmasi");
+
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = setTimeout(() => {
+          initQr();
+        }, 5000);
+      }
+    });
+
+    paymentSocket.on("gate:ack", () => {
+      setGateStatusText("Gate berhasil dibuka oleh hardware");
+    });
+
+    paymentSocket.on("connect_error", (error: any) => {
+      console.error("Payment realtime error:", error.message);
+    });
+
+    paymentSocketRef.current = paymentSocket;
+  }, []);
 
   const initQr = useCallback(async () => {
     try {
@@ -26,73 +102,58 @@ function PaymentComponent() {
       setGateStatusText("Pintu gate terbuka otomatis");
 
       const res = await aspiService.generateQr();
-      const data = (res.data as any)?.data || res.data;
+      const raw = res.data as any;
+      const data = raw?.data || raw;
 
       const content = data?.qrContent;
-      if (content) {
+      const partnerRef = data?.partnerReferenceNo;
+
+      if (content && partnerRef) {
         setQrSrc(
           `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=8&data=${encodeURIComponent(
             content
           )}`
         );
+        connectPaymentRealtime(partnerRef);
       } else {
-        setErrorMsg("Data QR tidak valid.");
+        setErrorMsg("Data QRIS atau Partner Reference tidak valid.");
       }
-
-      currentPartnerRef.current = data?.partnerReferenceNo || "";
     } catch (err: unknown) {
       const error = err as Error;
       setErrorMsg(error.message || "Gagal memuat QRIS.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [connectPaymentRealtime]);
 
   useEffect(() => {
-  const socket = getSocket();
-
-  initQr();
-
-  const handlePaymentStatus = (event: any) => {
-    const status = event?.status || event?.transactionStatus;
-    const refNo = event?.partnerReferenceNo;
-
-    if (!refNo || refNo === currentPartnerRef.current || status === "SUCCESS") {
-      setIsSuccess(true);
-
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-      resetTimerRef.current = setTimeout(() => {
-        initQr();
-      }, 5000);
+    if (!isInitialMount.current) {
+      isInitialMount.current = true;
+      initQr();
     }
+  }, [initQr]);
+
+  useEffect(() => {
+    return () => {
+      if (paymentSocketRef.current) {
+        paymentSocketRef.current.disconnect();
+      }
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const formatRupiah = (val: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(val);
   };
-
-  const handleGateAck = () => {
-    setGateStatusText("Gate berhasil dibuka oleh hardware");
-  };
-
-  const handleGateStatus = (event: any) => {
-    if (event?.status === "OFFLINE") {
-      setErrorMsg("Gate sedang offline. Silakan hubungi petugas.");
-    }
-  };
-
-  socket.on("payment:status", handlePaymentStatus);
-  socket.on("gate:ack", handleGateAck);
-  socket.on("gate:status", handleGateStatus);
-
-  return () => {
-    socket.off("payment:status", handlePaymentStatus);
-    socket.off("gate:ack", handleGateAck);
-    socket.off("gate:status", handleGateStatus);
-
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-  };
-}, [initQr]);
 
   return (
     <div className="relative flex h-screen w-full flex-col items-center justify-between overflow-hidden bg-[#1D408C] p-3 text-white select-none sm:p-5">
-
       <img
         src="/images/bg-pattern.svg"
         alt="Background Pattern"
@@ -117,9 +178,20 @@ function PaymentComponent() {
         <p className="mt-1.5 text-[10px] font-light text-blue-100 sm:mt-2 sm:text-xs">
           Tarif Retribusi Kebersihan
         </p>
-        <p className="mt-0.5 text-lg font-bold tracking-tight sm:text-xl md:text-2xl">
-          Rp 2.000 <span className="text-[10px] font-normal text-blue-200 sm:text-xs">/akses</span>
-        </p>
+
+        <div className="mt-0.5 flex h-7 items-center justify-center sm:h-8">
+          {loadingAmount ? (
+            <div className="flex items-center gap-1.5 text-blue-200">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-xs font-normal text-blue-200/80">Memuat tarif...</span>
+            </div>
+          ) : (
+            <p className="text-lg font-bold tracking-tight sm:text-xl md:text-2xl">
+              {formatRupiah(amount)}{" "}
+              <span className="text-[10px] font-normal text-blue-200 sm:text-xs">/akses</span>
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="relative z-10 my-auto flex w-full max-w-[240px] flex-col rounded-2xl bg-white p-3.5 text-gray-900 shadow-2xl transition-all sm:max-w-[280px] sm:p-5">
@@ -138,7 +210,7 @@ function PaymentComponent() {
               <CheckCircle2 className="h-10 w-10 animate-bounce sm:h-12 sm:w-12" />
               <span className="text-xs font-bold sm:text-sm">Pembayaran Berhasil!</span>
               <span className="text-[10px] text-gray-500 sm:text-xs">{gateStatusText}</span>
-              <span className="text-[9px] text-gray-400 mt-1">Layar akan reset otomatis</span>
+              <span className="mt-1 text-[9px] text-gray-400">Layar akan reset otomatis</span>
             </div>
           ) : errorMsg ? (
             <div className="flex flex-col items-center gap-1.5 px-2 text-center text-rose-500">

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
@@ -29,6 +37,35 @@ export class DashboardController {
   })
   registerGate(@Body('name') name: string, @Body('deviceCode') deviceCode: string) {
     return this.gateService.registerDevice(name, deviceCode);
+  }
+
+  @Post('gate-open')
+  @ApiBody({
+    schema: {
+      example: { deviceCode: 'GATE-001', transactionId: 'manual-123' },
+    },
+  })
+  async openGate(
+    @Body('deviceCode') deviceCode: string,
+    @Body('transactionId') transactionId?: string,
+  ) {
+    if (!deviceCode) {
+      throw new BadRequestException('deviceCode is required');
+    }
+
+    const commandId = transactionId || `manual-${Date.now()}`;
+    const sent = await this.gateService.openGate(deviceCode, commandId);
+    if (!sent) {
+      throw new BadRequestException(
+        'Gate device was not found or is not connected',
+      );
+    }
+
+    return {
+      deviceCode,
+      transactionId: commandId,
+      sent: true,
+    };
   }
 
   @Get('summary')

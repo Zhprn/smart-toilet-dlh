@@ -15,9 +15,6 @@ import { RolesGuard } from '../auth/guard/roles.guard';
 import { GateService } from '../gate/gate.service';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'SUPERADMIN')
-@ApiBearerAuth()
 export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService,
@@ -25,11 +22,17 @@ export class DashboardController {
   ) {}
 
   @Get('gates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
   getGates() {
     return this.gateService.listDevices();
   }
 
   @Post('gates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
   @ApiBody({
     schema: {
       example: { name: 'Main Gate', deviceCode: 'GATE-001' },
@@ -40,6 +43,9 @@ export class DashboardController {
   }
 
   @Post('gate-open')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
   @ApiBody({
     schema: {
       example: { deviceCode: 'GATE-001', transactionId: 'manual-123' },
@@ -69,6 +75,9 @@ export class DashboardController {
   }
 
   @Get('summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
   getSummary() {
     return this.dashboardService.getSummary();
   }
@@ -79,6 +88,9 @@ export class DashboardController {
   }
 
   @Patch('settings/amount')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
   @ApiBody({ schema: { example: { amount: 2000 } } })
   updateQrAmount(@Body('amount') amount: number) {
     return this.dashboardService.updateQrAmount(Number(amount));

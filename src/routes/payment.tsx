@@ -25,7 +25,7 @@ function PaymentComponent() {
       setIsSuccess(false);
       setGateStatusText("Pintu gate terbuka otomatis");
 
-      const res = await aspiService.generateQr({ amount: 2000 });
+      const res = await aspiService.generateQr();
       const data = (res.data as any)?.data || res.data;
 
       const content = data?.qrContent;
@@ -49,48 +49,46 @@ function PaymentComponent() {
   }, []);
 
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket.connected) {
-      socket.connect();
-    }
+  const socket = getSocket();
 
-    initQr();
+  initQr();
 
-    const handlePaymentStatus = (event: any) => {
-      const status = event?.status || event?.transactionStatus;
-      const refNo = event?.partnerReferenceNo;
+  const handlePaymentStatus = (event: any) => {
+    const status = event?.status || event?.transactionStatus;
+    const refNo = event?.partnerReferenceNo;
 
-      if (!refNo || refNo === currentPartnerRef.current || status === "SUCCESS") {
-        setIsSuccess(true);
+    if (!refNo || refNo === currentPartnerRef.current || status === "SUCCESS") {
+      setIsSuccess(true);
 
-        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-        resetTimerRef.current = setTimeout(() => {
-          initQr();
-        }, 5000);
-      }
-    };
-
-    const handleGateAck = () => {
-      setGateStatusText("Gate berhasil dibuka oleh hardware");
-    };
-
-    const handleGateStatus = (event: any) => {
-      if (event?.status === "OFFLINE") {
-        setErrorMsg("Gate sedang offline. Silakan hubungi petugas.");
-      }
-    };
-
-    socket.on("payment:status", handlePaymentStatus);
-    socket.on("gate:ack", handleGateAck);
-    socket.on("gate:status", handleGateStatus);
-
-    return () => {
-      socket.off("payment:status", handlePaymentStatus);
-      socket.off("gate:ack", handleGateAck);
-      socket.off("gate:status", handleGateStatus);
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    };
-  }, [initQr]);
+      resetTimerRef.current = setTimeout(() => {
+        initQr();
+      }, 5000);
+    }
+  };
+
+  const handleGateAck = () => {
+    setGateStatusText("Gate berhasil dibuka oleh hardware");
+  };
+
+  const handleGateStatus = (event: any) => {
+    if (event?.status === "OFFLINE") {
+      setErrorMsg("Gate sedang offline. Silakan hubungi petugas.");
+    }
+  };
+
+  socket.on("payment:status", handlePaymentStatus);
+  socket.on("gate:ack", handleGateAck);
+  socket.on("gate:status", handleGateStatus);
+
+  return () => {
+    socket.off("payment:status", handlePaymentStatus);
+    socket.off("gate:ack", handleGateAck);
+    socket.off("gate:status", handleGateStatus);
+
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+  };
+}, [initQr]);
 
   return (
     <div className="relative flex h-screen w-full flex-col items-center justify-between overflow-hidden bg-[#1D408C] p-3 text-white select-none sm:p-5">

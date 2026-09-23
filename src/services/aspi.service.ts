@@ -27,12 +27,10 @@ export interface AspiPaymentResponse {
 }
 
 export const aspiService = {
-  // POST /aspi/qr
-  generateQr: async (payload: Record<string, unknown> = { amount: 2000 }) => {
-    return apiClient.post<AspiQrData>("/aspi/qr", payload);
+  generateQr: async () => {
+    return apiClient.post<AspiQrData>("/aspi/qr", {});
   },
 
-  // POST /aspi/payment (pengganti query)
   processPayment: async (payload: Record<string, unknown>) => {
     return apiClient.post<AspiPaymentResponse>("/aspi/payment", payload);
   },

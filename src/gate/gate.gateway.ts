@@ -13,7 +13,11 @@ import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { GateService } from './gate.service';
 
-type DeviceAuth = { deviceCode?: string; deviceToken?: string };
+type DeviceAuth = {
+  deviceCode?: string;
+  deviceToken?: string;
+  partnerReferenceNo?: string;
+};
 
 @Injectable()
 @WebSocketGateway({ namespace: 'realtime', cors: { origin: '*' } })
@@ -47,6 +51,19 @@ export class GateGateway
       }
       client.join(`device:${device.deviceCode}`);
       await this.gateService.setDeviceStatus(device.deviceCode, 'ACTIVE');
+      return;
+    }
+
+    if (auth.partnerReferenceNo) {
+      const transaction = await this.prisma.transaction.findUnique({
+        where: { partnerReferenceNo: auth.partnerReferenceNo },
+        select: { partnerReferenceNo: true },
+      });
+      if (!transaction) {
+        client.disconnect(true);
+        return;
+      }
+      client.join(`payment:${transaction.partnerReferenceNo}`);
       return;
     }
 

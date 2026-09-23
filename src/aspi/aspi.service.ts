@@ -352,8 +352,9 @@ export class AspiService {
       'value',
     );
     const expectedAmount = Number(transaction.amount).toFixed(2);
+    const localStatus = this.mapSnapStatus(latestTransactionStatus);
 
-    if (latestTransactionStatus === '00' && responseAmount === expectedAmount) {
+    if (localStatus === 'SUCCESS' && responseAmount === expectedAmount) {
       const updatedTransaction = await this.prisma.transaction.update({
         where: { partnerReferenceNo },
         data: { status: 'SUCCESS', paidAt: new Date() },
@@ -367,9 +368,9 @@ export class AspiService {
     return {
       ...queryResponse,
       localTransactionStatus:
-        latestTransactionStatus === '00' && responseAmount === expectedAmount
+        localStatus === 'SUCCESS' && responseAmount === expectedAmount
           ? 'SUCCESS'
-          : transaction.status,
+          : localStatus ?? transaction.status,
       amountMatched: responseAmount === expectedAmount,
     };
   }
@@ -412,14 +413,9 @@ export class AspiService {
     const partnerReferenceNo =
       this.getString(payload, 'originalPartnerReferenceNo') ??
       this.getString(payload, 'partnerReferenceNo');
-    const responseCode = this.getString(payload, 'responseCode');
     const transactionStatus = this.getString(
       payload,
       'latestTransactionStatus',
-    );
-    const transactionStatusDesc = this.getString(
-      payload,
-      'transactionStatusDesc',
     );
 
     if (!partnerReferenceNo) {
@@ -436,13 +432,28 @@ export class AspiService {
       );
     }
 
-    const status = this.isSuccessfulResponse(
-      responseCode,
-      transactionStatus,
-      transactionStatusDesc,
-    )
-      ? 'SUCCESS'
-      : 'FAILED';
+    const status = this.mapSnapStatus(transactionStatus);
+    if (!status) {
+      if (transactionStatus === '04') {
+        return {
+          ...existingTransaction,
+          externalTransactionStatus: transactionStatus,
+          transactionStatusDesc: 'Refunded status requires local handling',
+        };
+      }
+      throw new BadRequestException(
+        `Unsupported ASPI transaction status: ${transactionStatus ?? 'missing'}`,
+      );
+    }
+
+    const responseAmount = this.getNestedString(payload, 'amount', 'value');
+    const expectedAmount = Number(existingTransaction.amount).toFixed(2);
+    if (status === 'SUCCESS' && responseAmount !== expectedAmount) {
+      throw new BadRequestException(
+        'Notification amount does not match transaction',
+      );
+    }
+
     const transaction = await this.prisma.transaction.update({
       where: { partnerReferenceNo },
       data: {
@@ -492,17 +503,23 @@ export class AspiService {
     return typeof value === 'string' ? value : undefined;
   }
 
-  private isSuccessfulResponse(
-    responseCode: string | undefined,
+  private mapSnapStatus(
     transactionStatus?: string,
-    transactionStatusDesc?: string,
-  ): boolean {
-    return (
-      responseCode === '2004700' ||
-      responseCode === '2000000' ||
-      transactionStatus === '00' ||
-      transactionStatusDesc?.toLowerCase() === 'success'
-    );
+  ): 'SUCCESS' | 'PENDING' | 'FAILED' | 'CANCELLED' | undefined {
+    switch (transactionStatus) {
+      case '00':
+        return 'SUCCESS';
+      case '01':
+      case '02':
+      case '03':
+        return 'PENDING';
+      case '05':
+        return 'CANCELLED';
+      case '06':
+        return 'FAILED';
+      default:
+        return undefined;
+    }
   }
 
   private generateValidityPeriod(): string {

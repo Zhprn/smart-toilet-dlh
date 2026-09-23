@@ -16,6 +16,8 @@ describe('AspiService', () => {
     transaction: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
   };
   const dashboardService = {
@@ -165,6 +167,73 @@ describe('AspiService', () => {
     expect(signatureOptions.headers.AccessToken).toBe('token-1');
     expect(qrRequest).toEqual(signatureRequest);
     expect(JSON.stringify(qrRequest)).toBe(JSON.stringify(signatureRequest));
+  });
+
+  it.each([
+    ['01', 'PENDING'],
+    ['02', 'PENDING'],
+    ['03', 'PENDING'],
+    ['05', 'CANCELLED'],
+    ['06', 'FAILED'],
+  ])(
+    'maps SNAP notification status %s to %s',
+    async (latestTransactionStatus, localStatus) => {
+      const service = new AspiService(
+        prisma as never,
+        dashboardService as unknown as DashboardService,
+        gateService as unknown as GateService,
+      );
+      const existingTransaction = {
+        id: 'transaction-1',
+        partnerReferenceNo: 'partner-1',
+        amount: 2000,
+        status: 'PENDING',
+      };
+      prisma.transaction.findUnique.mockResolvedValue(existingTransaction);
+      prisma.transaction.update.mockResolvedValue({
+        ...existingTransaction,
+        status: localStatus,
+      });
+
+      await expect(
+        service.handlePaymentNotification({
+          originalPartnerReferenceNo: 'partner-1',
+          latestTransactionStatus,
+        }),
+      ).resolves.toMatchObject({ status: localStatus });
+
+      expect(prisma.transaction.update).toHaveBeenCalledWith({
+        where: { partnerReferenceNo: 'partner-1' },
+        data: { status: localStatus },
+      });
+      expect(gateService.openGate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not silently map refunded notifications to failed', async () => {
+    const service = new AspiService(
+      prisma as never,
+      dashboardService as unknown as DashboardService,
+      gateService as unknown as GateService,
+    );
+    const existingTransaction = {
+      id: 'transaction-1',
+      partnerReferenceNo: 'partner-1',
+      amount: 2000,
+      status: 'SUCCESS',
+    };
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction);
+
+    await expect(
+      service.handlePaymentNotification({
+        originalPartnerReferenceNo: 'partner-1',
+        latestTransactionStatus: '04',
+      }),
+    ).resolves.toMatchObject({
+      status: 'SUCCESS',
+      externalTransactionStatus: '04',
+    });
+    expect(prisma.transaction.update).not.toHaveBeenCalled();
   });
 
 });

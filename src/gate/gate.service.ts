@@ -61,6 +61,10 @@ export class GateService {
 
   emitPaymentStatus(payload: Record<string, unknown>) {
     this.server?.to('dashboard').emit('payment:status', payload);
+    const partnerReferenceNo = payload.partnerReferenceNo;
+    if (typeof partnerReferenceNo === 'string') {
+      this.server?.to(`payment:${partnerReferenceNo}`).emit('payment:status', payload);
+    }
   }
 
   async openGate(deviceCode: string, transactionId: string) {

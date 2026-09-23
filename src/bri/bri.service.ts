@@ -342,6 +342,12 @@ export class BriService {
       },
     });
     if (success) {
+      this.gateService.emitPaymentStatus({
+        partnerReferenceNo: updatedTransaction.partnerReferenceNo,
+        transactionId: updatedTransaction.id,
+        status: 'SUCCESS',
+        amount: Number(updatedTransaction.amount).toFixed(2),
+      });
       await this.gateService.openGate(
         updatedTransaction.terminalId,
         updatedTransaction.id,

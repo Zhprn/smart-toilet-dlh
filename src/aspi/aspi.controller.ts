@@ -81,27 +81,4 @@ export class AspiController {
   query(@Body('partnerReferenceNo') partnerReferenceNo: string) {
     return this.aspiService.query(partnerReferenceNo);
   }
-
-  @Post('test/payment')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiBody({
-    schema: {
-      example: {
-        partnerReferenceNo: '179000000000012345',
-        status: 'SUCCESS',
-      },
-    },
-  })
-  simulatePayment(
-    @Body('partnerReferenceNo') partnerReferenceNo: string,
-    @Body('status') status: 'SUCCESS' | 'FAILED',
-  ) {
-    if (status !== 'SUCCESS' && status !== 'FAILED') {
-      throw new BadRequestException('status must be SUCCESS or FAILED');
-    }
-
-    return this.aspiService.simulatePayment(partnerReferenceNo, status);
-  }
-
 }

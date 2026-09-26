@@ -462,24 +462,21 @@ export class AspiService {
       },
     });
 
-    return transaction;
-  }
+    this.gateService.emitPaymentStatus({
+      ...payload,
+      partnerReferenceNo,
+      transactionId: transaction.id,
+      status,
+    });
 
-  async simulatePayment(
-    partnerReferenceNo: string,
-    status: 'SUCCESS' | 'FAILED',
-  ) {
-    if (process.env.ASPI_ENABLE_TEST_PAYMENT !== 'true') {
-      throw new ForbiddenException('Test payment simulation is disabled');
+    if (status === 'SUCCESS') {
+      await this.gateService.openGate(
+        transaction.terminalId,
+        transaction.id,
+      );
     }
 
-    return this.prisma.transaction.update({
-      where: { partnerReferenceNo },
-      data: {
-        status,
-        ...(status === 'SUCCESS' ? { paidAt: new Date() } : {}),
-      },
-    });
+    return transaction;
   }
 
   private getString(

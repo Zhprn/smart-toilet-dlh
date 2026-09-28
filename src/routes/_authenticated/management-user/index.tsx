@@ -49,7 +49,6 @@ function ManagementUserComponent() {
     role: "ADMIN",
   });
 
-  // Kriteria validasi password
   const password = formData.password;
   const hasMinLength = password.length >= 8;
   const hasUpperCase = /[A-Z]/.test(password);
@@ -57,7 +56,6 @@ function ManagementUserComponent() {
   const hasNumber = /[0-9]/.test(password);
   const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
 
-  // Password valid jika memenuhi semua aturan (atau kosong khusus saat edit)
   const isPasswordValid = selectedUser && !password ? true : (hasMinLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar);
 
   const fetchUsers = useCallback(async () => {
@@ -316,7 +314,6 @@ function ManagementUserComponent() {
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
                 />
 
-                {/* Indikator Validasi Password */}
                 {(formData.password.length > 0 || !selectedUser) && (
                   <div className="mt-2 rounded-xl bg-gray-50 p-2.5 border border-gray-100 space-y-1">
                     <p className="text-[10px] font-semibold text-gray-600 mb-1">

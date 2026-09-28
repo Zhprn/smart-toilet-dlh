@@ -8,11 +8,12 @@ import {
   Users,
   X,
   AlertCircle,
+  Check,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { userService } from "@/services/user.service";
 import type { UserItem } from "@/services/user.service";
-
 
 export const Route = createFileRoute("/_authenticated/management-user/")({
   beforeLoad: ({ context }) => {
@@ -47,6 +48,17 @@ function ManagementUserComponent() {
     password: "",
     role: "ADMIN",
   });
+
+  // Kriteria validasi password
+  const password = formData.password;
+  const hasMinLength = password.length >= 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
+
+  // Password valid jika memenuhi semua aturan (atau kosong khusus saat edit)
+  const isPasswordValid = selectedUser && !password ? true : (hasMinLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -97,6 +109,8 @@ function ManagementUserComponent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPasswordValid) return;
+
     try {
       setSubmitting(true);
       if (selectedUser) {
@@ -301,6 +315,37 @@ function ManagementUserComponent() {
                   placeholder="Password"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-800 focus:border-[#1D408C] focus:outline-none"
                 />
+
+                {/* Indikator Validasi Password */}
+                {(formData.password.length > 0 || !selectedUser) && (
+                  <div className="mt-2 rounded-xl bg-gray-50 p-2.5 border border-gray-100 space-y-1">
+                    <p className="text-[10px] font-semibold text-gray-600 mb-1">
+                      Syarat Keamanan Password:
+                    </p>
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      <div className={`flex items-center gap-1.5 ${hasMinLength ? "text-emerald-600 font-medium" : "text-gray-400"}`}>
+                        {hasMinLength ? <Check className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        <span>Minimal 8 karakter</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasUpperCase ? "text-emerald-600 font-medium" : "text-gray-400"}`}>
+                        {hasUpperCase ? <Check className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        <span>Huruf besar (A-Z)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasLowerCase ? "text-emerald-600 font-medium" : "text-gray-400"}`}>
+                        {hasLowerCase ? <Check className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        <span>Huruf kecil (a-z)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasNumber ? "text-emerald-600 font-medium" : "text-gray-400"}`}>
+                        {hasNumber ? <Check className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        <span>Angka (0-9)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 col-span-2 ${hasSpecialChar ? "text-emerald-600 font-medium" : "text-gray-400"}`}>
+                        {hasSpecialChar ? <Check className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        <span>Karakter khusus / Simbol (!@#$%^&*)</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -328,8 +373,8 @@ function ManagementUserComponent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1D408C] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#16326e] disabled:opacity-50"
+                  disabled={submitting || !isPasswordValid}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1D408C] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#16326e] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>{selectedUser ? "Simpan Perubahan" : "Buat Pengguna"}</span>
@@ -339,6 +384,7 @@ function ManagementUserComponent() {
           </div>
         </div>
       )}
+
       {userToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95">

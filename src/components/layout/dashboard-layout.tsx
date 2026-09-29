@@ -213,10 +213,12 @@ export function DashboardLayout() {
 
           <button
             type="button"
+            disabled={loggingOut}
             onClick={handleLogout}
             className="mt-4 w-full rounded-xl border border-white/30 bg-transparent py-2.5 text-xs font-semibold text-white transition hover:bg-white/10 active:scale-[0.99]"
           >
-            Keluar
+            {loggingOut && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <span>{loggingOut ? "Mengeluarkan..." : "Keluar"}</span>
           </button>
         </div>
       </aside>

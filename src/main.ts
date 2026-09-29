@@ -12,6 +12,20 @@ import requestLogger from './common/middleware/request-logger.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.use((request, response, next) => {
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('X-Frame-Options', 'DENY');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    );
+    if (process.env.NODE_ENV === 'production') {
+      response.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    }
+    next();
+  });
+
   app.enableCors({
     origin: '*',
     credentials: true,

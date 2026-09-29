@@ -7,10 +7,17 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { LoginRateLimitGuard } from './login-rate-limit.guard';
+import { LoginRateLimitService } from './login-rate-limit.service';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LoginRateLimitService,
+    LoginRateLimitGuard,
+  ],
   imports: [
     UserModule,
     PrismaModule,

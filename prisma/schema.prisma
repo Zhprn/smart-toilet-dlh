@@ -40,6 +40,12 @@ model TokenBlacklist {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model LoginAttemptBucket {
+  key             String   @id
+  count           Int      @default(0)
+  windowStartedAt DateTime @default(now())
+}
+
 model Transaction {
   id                 String    @id @default(uuid())
   partnerReferenceNo String    @unique

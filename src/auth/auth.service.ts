@@ -4,15 +4,17 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
-import { UnauthorizedException } from '@nestjs/common';
+import { Optional, UnauthorizedException } from '@nestjs/common';
+import { LoginRateLimitService } from './login-rate-limit.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prismaService: PrismaService,
+    @Optional() private readonly loginRateLimit?: LoginRateLimitService,
   ) {}
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, ip = 'unknown') {
     const user = await this.prismaService.user.findUnique({
       where: {
         email: loginDto.email,
@@ -20,6 +22,7 @@ export class AuthService {
       },
     });
     if (!user) {
+      await this.loginRateLimit?.recordFailure(ip, loginDto.email);
       throw new UnauthorizedException('Invalid credentials');
     }
     const isPasswordMatch = await bcrypt.compare(
@@ -27,6 +30,7 @@ export class AuthService {
       user.password,
     );
     if (!isPasswordMatch) {
+      await this.loginRateLimit?.recordFailure(ip, loginDto.email);
       throw new UnauthorizedException('Invalid credentials');
     }
     const payload = {

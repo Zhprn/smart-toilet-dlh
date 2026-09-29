@@ -14,12 +14,14 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { ResponseLoginDto } from './dto/response-login.dto';
 import { User } from '../common/decorators/user.decorator';
 import { JwtAuthGuard } from './guard/jwt-guard.auth';
+import { LoginRateLimitGuard } from './login-rate-limit.guard';
 import type { Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @UseGuards(LoginRateLimitGuard)
   @Post('login')
   @ApiBody({
     description: 'Login User',
@@ -34,8 +36,11 @@ export class AuthController {
     description: 'Login User successfully',
     type: ResponseLoginDto,
   })
-  async login(@Body(new ZodValidationPipe(LoginSchema)) loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body(new ZodValidationPipe(LoginSchema)) loginDto: LoginDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.login(loginDto, request.ip || 'unknown');
   }
 
   @UseGuards(JwtAuthGuard)

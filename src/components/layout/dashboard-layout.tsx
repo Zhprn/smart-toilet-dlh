@@ -12,7 +12,11 @@ import {
   Menu,
   X,
   Settings,
+  Loader2,
 } from "lucide-react";
+
+import { authService } from "@/services/auth.service";
+import { toast } from "sonner";
 
 interface NavItem {
   title: string;
@@ -50,6 +54,7 @@ const primaryNav: NavItem[] = [
 export function DashboardLayout() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -66,10 +71,21 @@ export function DashboardLayout() {
     }
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("auth-token");
-    localStorage.removeItem("user-data");
-    navigate({ to: "/login" });
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      if (authService?.logout) {
+        await authService.logout();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      localStorage.removeItem("auth-token");
+      localStorage.removeItem("user-data");
+      toast.success("Berhasil keluar");
+      setLoggingOut(false);
+      navigate({ to: "/login" });
+    }
   };
 
   const displayName = user?.name || "ADMIN GATE QRIS";

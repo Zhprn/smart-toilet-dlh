@@ -14,7 +14,7 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { ResponseLoginDto } from './dto/response-login.dto';
 import { User } from '../common/decorators/user.decorator';
 import { JwtAuthGuard } from './guard/jwt-guard.auth';
-import { LoginRateLimitGuard } from './login-rate-limit.guard';
+import { LoginRateLimitGuard } from './guard/login-rate-limit.guard';
 import type { Request } from 'express';
 
 @Controller('auth')

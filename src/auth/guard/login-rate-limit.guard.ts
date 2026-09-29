@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { LoginRateLimitService } from './login-rate-limit.service';
+import { LoginRateLimitService } from '../login-rate-limit.service';
 
 @Injectable()
 export class LoginRateLimitGuard implements CanActivate {

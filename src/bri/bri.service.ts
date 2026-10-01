@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { GateService } from '../gate/gate.service';
@@ -33,8 +35,41 @@ export class BriService {
   private readonly merchantId = process.env.BRI_MERCHANT_ID!;
   private readonly terminalId = process.env.BRI_TERMINAL_ID!;
 
-  private readonly privateKey = process.env.BRI_PRIVATE_KEY!;
+  private readonly privateKey = process.env.BRI_PRIVATE_KEY;
   private readonly webhookSecret = process.env.BRI_WEBHOOK_SECRET;
+
+  resolvePrivateKey(): string {
+    const configuredKey = this.privateKey?.trim();
+
+    if (configuredKey) {
+      const trimmed = configuredKey.trim();
+
+      if (trimmed.includes('BEGIN PRIVATE KEY')) {
+        return trimmed;
+      }
+
+      if (fs.existsSync(trimmed)) {
+        return fs.readFileSync(trimmed, 'utf8').trim();
+      }
+    }
+
+    const secretCandidates = [
+      path.resolve(process.cwd(), 'secrets', 'bri_private_key.pem'),
+      path.resolve(process.cwd(), 'secrets', 'bri-private-key.pem'),
+      path.resolve(process.cwd(), 'secrets', 'bri_private_key.key'),
+      path.resolve(process.cwd(), 'secrets', 'bri_private_key'),
+    ];
+
+    for (const candidate of secretCandidates) {
+      if (fs.existsSync(candidate)) {
+        return fs.readFileSync(candidate, 'utf8').trim();
+      }
+    }
+
+    throw new InternalServerErrorException(
+      'BRI_PRIVATE_KEY is required. Set it in .env or place the PEM file under /secrets/bri_private_key.pem',
+    );
+  }
 
   /**
    * Generate timestamp ISO 8601
@@ -87,13 +122,7 @@ export class BriService {
     //   'bri_private_key.pem',
     // );
     // const privateKey = readFileSync(privateKeyPath, 'utf8');
-    const privateKey = this.privateKey;
-
-    if (!privateKey) {
-      throw new InternalServerErrorException(
-        'BRI_PRIVATE_KEY belum dikonfigurasi',
-      );
-    }
+    const privateKey = this.resolvePrivateKey();
 
     const signer = crypto.createSign('RSA-SHA256');
 
@@ -103,7 +132,7 @@ export class BriService {
     const signature = signer.sign(privateKey, 'base64');
 
     const response = await axios.post(
-      `${this.baseUrl}/api/v1.0/access-token/b2b`,
+      `${this.baseUrl}/snap/v1.0/access-token/b2b`,
       {
         grantType: 'client_credentials',
         additionalInfo: {},
@@ -169,13 +198,13 @@ export class BriService {
    * Generate QR MPM Dynamic
    */
   async generateQR() {
-    const endpoint = '/api/v1.0/qr/qr-mpm-generate';
+    const endpoint = '/snap/v1.1/qr/qr-mpm-generate';
 
     const accessToken = await this.getAccessToken();
 
     const timestamp = this.generateTimestamp();
     const qrAmount = await this.dashboardService.getQrAmount();
-    const partnerReferenceNo = `GATE-${Date.now()}`;
+    const partnerReferenceNo = `${Date.now()}${Math.floor(Math.random() * 900000) + 100000}`;
 
     const body = {
       partnerReferenceNo,
@@ -257,13 +286,15 @@ export class BriService {
       throw new NotFoundException('Transaction not found');
     }
 
-    const endpoint = '/api/v1.0/qr/qr-mpm-query';
+    const endpoint = '/snap/v1.1/qr/qr-mpm-query';
     const accessToken = await this.getAccessToken();
     const timestamp = this.generateTimestamp();
     const body = {
       originalReferenceNo: transaction.referenceNo,
-      originalPartnerReferenceNo: transaction.partnerReferenceNo,
-      terminalId: transaction.terminalId,
+      serviceCode: '47',
+      additionalInfo: {
+        terminalId: transaction.terminalId,
+      },
     };
     const signature = this.generateSignature(
       'POST',
@@ -293,12 +324,14 @@ export class BriService {
   ) {
     this.verifyWebhookSignature(payload, signature);
 
-    const partnerReferenceNo = this.getString(
-      payload,
-      'originalPartnerReferenceNo',
-    );
+    const partnerReferenceNo =
+      this.getString(payload, 'originalPartnerReferenceNo') ??
+      this.getString(payload, 'partnerReferenceNo');
+
     if (!partnerReferenceNo) {
-      throw new BadRequestException('originalPartnerReferenceNo is required');
+      throw new BadRequestException(
+        'originalPartnerReferenceNo or partnerReferenceNo is required',
+      );
     }
 
     const transaction = await this.prisma.transaction.findUnique({
@@ -360,25 +393,61 @@ export class BriService {
     payload: Record<string, unknown>,
     signature?: string,
   ) {
-    if (!this.webhookSecret) {
-      throw new InternalServerErrorException('BRI_WEBHOOK_SECRET is not configured');
+    const secretCandidates = [this.webhookSecret, this.clientSecret].filter(
+      (secret): secret is string => typeof secret === 'string' && secret.length > 0,
+    );
+
+    if (secretCandidates.length === 0) {
+      throw new InternalServerErrorException(
+        'BRI webhook secret is not configured',
+      );
     }
     if (!signature) {
       throw new UnauthorizedException('BRI webhook signature is required');
     }
 
-    const expected = crypto
-      .createHmac('sha512', this.webhookSecret)
-      .update(JSON.stringify(payload))
-      .digest('base64');
-    const expectedBuffer = Buffer.from(expected);
+    const payloadVariants = [
+      JSON.stringify(payload),
+      this.canonicalJson(payload),
+    ];
+
     const receivedBuffer = Buffer.from(signature);
-    if (
-      expectedBuffer.length !== receivedBuffer.length ||
-      !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
-    ) {
-      throw new UnauthorizedException('Invalid BRI webhook signature');
+
+    for (const secret of secretCandidates) {
+      for (const variant of payloadVariants) {
+        const expected = crypto
+          .createHmac('sha512', secret)
+          .update(variant)
+          .digest('base64');
+        const expectedBuffer = Buffer.from(expected);
+
+        if (
+          expectedBuffer.length === receivedBuffer.length &&
+          crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+        ) {
+          return;
+        }
+      }
     }
+
+    throw new UnauthorizedException('Invalid BRI webhook signature');
+  }
+
+  private canonicalJson(value: unknown): string {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.canonicalJson(item)).join(',')}]`;
+    }
+
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).sort(
+        ([left], [right]) => left.localeCompare(right),
+      );
+      return `{${entries
+        .map(([key, item]) => `${JSON.stringify(key)}:${this.canonicalJson(item)}`)
+        .join(',')}}`;
+    }
+
+    return JSON.stringify(value);
   }
 
   private buildTransactionHeaders(
@@ -411,72 +480,5 @@ export class BriService {
     return typeof value === 'string' || typeof value === 'number'
       ? Number(value).toFixed(2)
       : undefined;
-  }
-
-  async payment(params: {
-    partnerReferenceNo: string;
-    otp: string;
-    verificationId: string;
-  }) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { partnerReferenceNo: params.partnerReferenceNo },
-    });
-    if (!transaction) {
-      throw new NotFoundException('Transaction not found');
-    }
-
-    const endpoint = '/api/v1.0/qr/qr-mpm-payment';
-
-    const accessToken = await this.getAccessToken();
-
-    const timestamp = this.generateTimestamp();
-
-    const body = {
-      partnerReferenceNo: params.partnerReferenceNo,
-
-      merchantId: this.merchantId,
-
-      amount: {
-        value: Number(transaction.amount).toFixed(2),
-        currency: 'IDR',
-      },
-
-      otp: params.otp,
-
-      verificationId: params.verificationId,
-
-      additionalInfo: {
-        deviceId: '12345679237',
-        channel: 'mobilephone',
-      },
-    };
-
-    const signature = this.generateSignature(
-      'POST',
-      endpoint,
-      accessToken,
-      timestamp,
-      body,
-    );
-
-    const externalId = this.generateExternalId();
-
-    const response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-
-        Authorization: `Bearer ${accessToken}`,
-
-        'X-TIMESTAMP': timestamp,
-        'X-SIGNATURE': signature,
-
-        'X-PARTNER-ID': this.partnerId,
-        'X-EXTERNAL-ID': externalId,
-        'CHANNEL-ID': this.channelId,
-      },
-    });
-
-    return this.applyPaymentStatus(transaction, response.data);
   }
 }

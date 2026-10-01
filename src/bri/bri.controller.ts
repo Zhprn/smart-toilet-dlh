@@ -20,23 +20,17 @@ export class BriController {
     return this.briService.inquiry(partnerReferenceNo);
   }
 
-  @Post('qris/notify')
+}
+
+@Controller()
+export class BriWebhookController {
+  constructor(private readonly briService: BriService) {}
+
+  @Post('v1.1/qr-dynamic/qr-mpm-notify')
   notify(
     @Body() body: Record<string, unknown>,
     @Headers('x-signature') signature?: string,
   ) {
     return this.briService.handleNotification(body, signature);
-  }
-
-  @Post('payment')
-  async payment(
-    @Body()
-    body: {
-      partnerReferenceNo: string;
-      otp: string;
-      verificationId: string;
-    },
-  ) {
-    return this.briService.payment(body);
   }
 }

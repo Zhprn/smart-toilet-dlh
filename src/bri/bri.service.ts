@@ -55,9 +55,6 @@ export class BriService {
 
     const secretCandidates = [
       path.resolve(process.cwd(), 'secrets', 'bri_private_key.pem'),
-      path.resolve(process.cwd(), 'secrets', 'bri-private-key.pem'),
-      path.resolve(process.cwd(), 'secrets', 'bri_private_key.key'),
-      path.resolve(process.cwd(), 'secrets', 'bri_private_key'),
     ];
 
     for (const candidate of secretCandidates) {
@@ -96,9 +93,6 @@ export class BriService {
 
   /**
    * Generate access token.
-   *
-   * Token tidak perlu dibuat setiap request.
-   * Kita cache sampai mendekati expired.
    */
   async getAccessToken(): Promise<string> {
     const now = Date.now();
@@ -116,12 +110,6 @@ export class BriService {
      * Signature OAuth:
      * SHA256withRSA
      */
-    // const privateKeyPath = join(
-    //   process.cwd(),
-    //   'secrets',
-    //   'bri_private_key.pem',
-    // );
-    // const privateKey = readFileSync(privateKeyPath, 'utf8');
     const privateKey = this.resolvePrivateKey();
 
     const signer = crypto.createSign('RSA-SHA256');
@@ -174,10 +162,6 @@ export class BriService {
     timestamp: string,
     body: unknown,
   ): string {
-    /**
-     * JSON.stringify menghasilkan compact JSON
-     * tanpa whitespace tambahan.
-     */
     const minifiedBody = JSON.stringify(body);
 
     const bodyHash = crypto
@@ -384,6 +368,7 @@ export class BriService {
       await this.gateService.openGate(
         updatedTransaction.terminalId,
         updatedTransaction.id,
+        'PAYMENT',
       );
     }
     return updatedTransaction;

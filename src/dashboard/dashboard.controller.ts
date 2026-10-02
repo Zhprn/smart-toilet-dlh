@@ -29,6 +29,14 @@ export class DashboardController {
     return this.gateService.listDevices();
   }
 
+  @Get('gate-open-logs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPERADMIN')
+  @ApiBearerAuth()
+  getGateOpenLogs() {
+    return this.gateService.listOpenLogs();
+  }
+
   @Post('gates')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPERADMIN')
@@ -48,7 +56,7 @@ export class DashboardController {
   @ApiBearerAuth()
   @ApiBody({
     schema: {
-      example: { deviceCode: 'GATE-001', transactionId: 'manual-123' },
+      example: { deviceCode: 'GATE-001' },
     },
   })
   async openGate(
@@ -60,7 +68,11 @@ export class DashboardController {
     }
 
     const commandId = transactionId || `manual-${Date.now()}`;
-    const sent = await this.gateService.openGate(deviceCode, commandId);
+    const sent = await this.gateService.openGate(
+      deviceCode,
+      commandId,
+      'MANUAL',
+    );
     if (!sent) {
       throw new BadRequestException(
         'Gate device was not found or is not connected',

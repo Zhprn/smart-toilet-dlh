@@ -68,6 +68,35 @@ enum Status {
   CANCELLED
 }
 
+enum GateOpenSource {
+  PAYMENT
+  MANUAL
+}
+
+enum GateOpenStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DEVICE_NOT_FOUND
+  DEVICE_OFFLINE
+  SERVER_UNAVAILABLE
+}
+
+model GateOpenLog {
+  id             String         @id @default(uuid())
+  transactionId  String
+  deviceCode     String
+  source         GateOpenSource
+  status         GateOpenStatus @default(PENDING)
+  error          String?
+  createdAt      DateTime       @default(now())
+  acknowledgedAt DateTime?
+
+  @@index([createdAt])
+  @@index([deviceCode, createdAt])
+  @@index([transactionId])
+}
+
 model GateDevices {
   id              String    @id @default(uuid())
   name            String

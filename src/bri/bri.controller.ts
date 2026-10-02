@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
 import { BriService } from './bri.service';
+import { ApiBody, ApiOkResponse } from '@nestjs/swagger';
 
 @Controller('bri')
 export class BriController {
@@ -16,10 +17,20 @@ export class BriController {
   }
 
   @Post('inquiry')
+  @ApiBody({
+      description: 'Inquiry Request',
+      schema: {
+        example: {
+          partnerReferenceNo: '1234567890',
+        },
+      },
+    })
+  @ApiOkResponse({
+    description: 'Inquiry successfully',
+  })
   inquiry(@Body('partnerReferenceNo') partnerReferenceNo: string) {
     return this.briService.inquiry(partnerReferenceNo);
   }
-
 }
 
 @Controller()

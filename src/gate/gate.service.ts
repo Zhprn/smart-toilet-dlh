@@ -67,19 +67,99 @@ export class GateService {
     }
   }
 
-  async openGate(deviceCode: string, transactionId: string) {
+  async openGate(
+    deviceCode: string,
+    transactionId: string,
+    source: 'PAYMENT' | 'MANUAL' = 'MANUAL',
+  ) {
+    const log = await this.prisma.gateOpenLog.create({
+      data: { transactionId, deviceCode, source },
+    });
     const device = await this.prisma.gateDevices.findUnique({
       where: { deviceCode },
     });
-    if (!device || !this.server) {
+
+    if (!device) {
+      await this.prisma.gateOpenLog.update({
+        where: { id: log.id },
+        data: { status: 'DEVICE_NOT_FOUND', error: 'Gate device not found' },
+      });
       return false;
     }
 
-    this.server.to(`device:${deviceCode}`).emit('gate:open', {
+    if (!this.server) {
+      await this.prisma.gateOpenLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'SERVER_UNAVAILABLE',
+          error: 'WebSocket server unavailable',
+        },
+      });
+      return false;
+    }
+
+    const room = `device:${deviceCode}`;
+    const connectedSockets = await this.server.in(room).fetchSockets();
+    if (connectedSockets.length === 0) {
+      await this.prisma.gateOpenLog.update({
+        where: { id: log.id },
+        data: { status: 'DEVICE_OFFLINE', error: 'Gate device is offline' },
+      });
+      return false;
+    }
+
+    this.server.to(room).emit('gate:open', {
+      commandId: log.id,
       transactionId,
       deviceCode,
       durationMs: 1000,
     });
     return true;
+  }
+
+  async acknowledgeOpenGate(payload: Record<string, unknown>) {
+    const deviceCode = payload.deviceCode;
+    const transactionId = payload.transactionId;
+    const commandId = payload.commandId;
+    if (typeof deviceCode !== 'string') return null;
+
+    const log =
+      typeof commandId === 'string'
+        ? await this.prisma.gateOpenLog.findFirst({
+            where: { id: commandId, deviceCode, status: 'PENDING' },
+          })
+        : typeof transactionId === 'string'
+          ? await this.prisma.gateOpenLog.findFirst({
+              where: { transactionId, deviceCode, status: 'PENDING' },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
+
+    if (!log) return null;
+
+    const succeeded = payload.success === true;
+    const error = payload.error;
+    return this.prisma.gateOpenLog.update({
+      where: { id: log.id },
+      data: {
+        status: succeeded ? 'SUCCESS' : 'FAILED',
+        acknowledgedAt: new Date(),
+        ...(!succeeded
+          ? {
+              error:
+                typeof error === 'string' && error.length > 0
+                  ? error
+                  : 'Gate device reported that opening failed',
+            }
+          : {}),
+      },
+    });
+  }
+
+  listOpenLogs() {
+    return this.prisma.gateOpenLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
   }
 }

@@ -97,8 +97,23 @@ export class GateGateway
   }
 
   @SubscribeMessage('gate:ack')
-  acknowledge(@MessageBody() body: Record<string, unknown>) {
+  async acknowledge(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: Record<string, unknown>,
+  ) {
+    const deviceCode = body.deviceCode;
+    if (
+      typeof deviceCode !== 'string' ||
+      !client.rooms.has(`device:${deviceCode}`)
+    ) {
+      return;
+    }
+
+    const log = await this.gateService.acknowledgeOpenGate(body);
     this.logger.log(`Gate acknowledged command: ${JSON.stringify(body)}`);
-    this.server.to('dashboard').emit('gate:ack', body);
+    this.server.to('dashboard').emit('gate:ack', {
+      ...body,
+      ...(log ? { status: log.status, error: log.error } : {}),
+    });
   }
 }

@@ -304,6 +304,7 @@ export class AspiService {
       await this.gateService.openGate(
         updatedTransaction.terminalId,
         updatedTransaction.id,
+        'PAYMENT',
       );
     }
 
@@ -362,6 +363,7 @@ export class AspiService {
       await this.gateService.openGate(
         updatedTransaction.terminalId,
         updatedTransaction.id,
+        'PAYMENT',
       );
     }
 
@@ -473,6 +475,7 @@ export class AspiService {
       await this.gateService.openGate(
         transaction.terminalId,
         transaction.id,
+        'PAYMENT',
       );
     }
 

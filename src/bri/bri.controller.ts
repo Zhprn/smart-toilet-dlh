@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post } from '@nestjs/common';
 import { BriService } from './bri.service';
 import { ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { SkipResponseTransform } from '../common/decorators/skip-response-transform.decorator';
@@ -48,7 +48,7 @@ export class BriWebhookController {
     return this.briService.handleNotification(body, signature);
   }
 
-  @Get('snap/v1.1/access-token/b2b')
+  @Post('snap/v1.1/access-token/b2b')
   @SkipResponseTransform()
   getAccessToken() {
     return this.briService.getAccessTokenResponse();

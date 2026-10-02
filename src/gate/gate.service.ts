@@ -41,6 +41,7 @@ export class GateService {
       id: device.id,
       name: device.name,
       deviceCode: device.deviceCode,
+      authToken: device.authToken,
       status:
         device.lastConnectedAt && device.lastConnectedAt >= activeSince
           ? 'ACTIVE'

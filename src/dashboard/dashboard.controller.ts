@@ -5,9 +5,10 @@ import {
   Get,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guard/jwt-guard.auth';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -33,8 +34,13 @@ export class DashboardController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPERADMIN')
   @ApiBearerAuth()
-  getGateOpenLogs() {
-    return this.gateService.listOpenLogs();
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  getGateOpenLogs(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.gateService.listOpenLogs(Number(page), Number(limit));
   }
 
   @Post('gates')

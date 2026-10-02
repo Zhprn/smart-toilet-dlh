@@ -156,10 +156,26 @@ export class GateService {
     });
   }
 
-  listOpenLogs() {
-    return this.prisma.gateOpenLog.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+  async listOpenLogs(page = 1, limit = 20) {
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+    const [data, total] = await Promise.all([
+      this.prisma.gateOpenLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: (safePage - 1) * safeLimit,
+        take: safeLimit,
+      }),
+      this.prisma.gateOpenLog.count(),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.ceil(total / safeLimit),
+      },
+    };
   }
 }

@@ -10,6 +10,7 @@ describe('GateService', () => {
       create: jest.Mock;
       findFirst: jest.Mock;
       findMany: jest.Mock;
+      count: jest.Mock;
       update: jest.Mock;
     };
   };
@@ -25,6 +26,7 @@ describe('GateService', () => {
         create: jest.fn().mockResolvedValue({ id: 'command-1' }),
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        count: jest.fn(),
         update: jest.fn(),
       },
     };
@@ -97,5 +99,21 @@ describe('GateService', () => {
     expect(updateData.status).toBe('FAILED');
     expect(updateData.error).toBe('Relay unavailable');
     expect(updateData.acknowledgedAt).toBeInstanceOf(Date);
+  });
+
+  it('paginates gate-open logs and returns pagination metadata', async () => {
+    prisma.gateOpenLog.findMany.mockResolvedValue([{ id: 'command-1' }]);
+    prisma.gateOpenLog.count.mockResolvedValue(41);
+
+    await expect(service.listOpenLogs(3, 15)).resolves.toEqual({
+      data: [{ id: 'command-1' }],
+      meta: { page: 3, limit: 15, total: 41, totalPages: 3 },
+    });
+    expect(prisma.gateOpenLog.findMany).toHaveBeenCalledWith({
+      orderBy: { createdAt: 'desc' },
+      skip: 30,
+      take: 15,
+    });
+    expect(prisma.gateOpenLog.count).toHaveBeenCalledWith();
   });
 });

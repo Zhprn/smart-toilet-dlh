@@ -44,4 +44,9 @@ export class BriWebhookController {
   ) {
     return this.briService.handleNotification(body, signature);
   }
+
+  @Get('snap/v1.1/access-token/b2b')
+  getAccessToken() {
+    return this.briService.getAccessToken();
+  }
 }

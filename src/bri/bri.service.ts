@@ -34,6 +34,7 @@ export class BriService {
 
   private readonly merchantId = process.env.BRI_MERCHANT_ID!;
   private readonly terminalId = process.env.BRI_TERMINAL_ID!;
+  private readonly gateDeviceCode = process.env.BRI_GATE_DEVICE_CODE!;
 
   private readonly privateKey = process.env.BRI_PRIVATE_KEY;
   private readonly webhookSecret = process.env.BRI_WEBHOOK_SECRET;
@@ -366,7 +367,7 @@ export class BriService {
         amount: Number(updatedTransaction.amount).toFixed(2),
       });
       await this.gateService.openGate(
-        updatedTransaction.terminalId,
+        this.gateDeviceCode,
         updatedTransaction.id,
         'PAYMENT',
       );

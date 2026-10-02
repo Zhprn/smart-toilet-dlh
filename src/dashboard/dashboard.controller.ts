@@ -30,6 +30,11 @@ export class DashboardController {
     return this.gateService.listDevices();
   }
 
+  @Get('gate-device-codes')
+  getGateDeviceCodes() {
+    return this.gateService.listDeviceCodes();
+  }
+
   @Get('gate-open-logs')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPERADMIN')

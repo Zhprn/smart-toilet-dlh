@@ -5,7 +5,7 @@ import { Server } from 'socket.io';
 describe('GateService', () => {
   let service: GateService;
   let prisma: {
-    gateDevices: { findUnique: jest.Mock };
+    gateDevices: { findMany: jest.Mock; findUnique: jest.Mock };
     gateOpenLog: {
       create: jest.Mock;
       findFirst: jest.Mock;
@@ -20,6 +20,7 @@ describe('GateService', () => {
   beforeEach(() => {
     prisma = {
       gateDevices: {
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest
           .fn()
           .mockResolvedValue({ id: 'device-1', deviceCode: 'GATE-001' }),
@@ -76,6 +77,22 @@ describe('GateService', () => {
     expect(prisma.gateDevices.findUnique).toHaveBeenLastCalledWith({
       where: { deviceCode: 'GATE-002' },
       select: { id: true, deviceCode: true },
+    });
+  });
+
+  it('returns only sorted device codes for public transaction selection', async () => {
+    prisma.gateDevices.findMany.mockResolvedValue([
+      { deviceCode: 'GATE-001' },
+      { deviceCode: 'GATE-002' },
+    ]);
+
+    await expect(service.listDeviceCodes()).resolves.toEqual([
+      'GATE-001',
+      'GATE-002',
+    ]);
+    expect(prisma.gateDevices.findMany).toHaveBeenCalledWith({
+      select: { deviceCode: true },
+      orderBy: { deviceCode: 'asc' },
     });
   });
 

@@ -50,6 +50,15 @@ export class GateService {
     }));
   }
 
+  async listDeviceCodes() {
+    const devices = await this.prisma.gateDevices.findMany({
+      select: { deviceCode: true },
+      orderBy: { deviceCode: 'asc' },
+    });
+
+    return devices.map((device) => device.deviceCode);
+  }
+
   async setDeviceStatus(deviceCode: string, status: string) {
     await this.prisma.gateDevices.update({
       where: { deviceCode },

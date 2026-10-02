@@ -14,6 +14,7 @@ describe('BriController', () => {
           provide: BriService,
           useValue: {
             generateQR: jest.fn(),
+            getAccessTokenResponse: jest.fn(),
             payment: jest.fn(),
           },
         },
@@ -32,6 +33,12 @@ describe('BriController', () => {
     await controller.generateQR('GATE-002');
 
     expect(service.generateQR).toHaveBeenCalledWith('GATE-002');
+  });
+
+  it('returns the formatted access-token response', async () => {
+    await controller.getToken();
+
+    expect(service.getAccessTokenResponse).toHaveBeenCalledWith();
   });
 
   it('should call payment on the service', async () => {

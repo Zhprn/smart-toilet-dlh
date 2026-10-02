@@ -152,6 +152,18 @@ export class BriService {
     return data.accessToken;
   }
 
+  async getAccessTokenResponse() {
+    const accessToken = await this.getAccessToken();
+
+    return {
+      accessToken,
+      tokenType: 'BearerToken',
+      expiresIn: String(
+        Math.max(0, Math.floor((this.accessTokenExpiredAt - Date.now()) / 1000)),
+      ),
+    };
+  }
+
   /**
    * Generate BRI transactional signature.
    */

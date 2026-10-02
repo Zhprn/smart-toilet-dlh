@@ -25,6 +25,22 @@ describe('BriService', () => {
     expect(service).toBeDefined();
   });
 
+  it('returns the BRI access-token response format with string expiry', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-02T00:00:00Z'));
+    (service as any).accessToken = 'token-123';
+    (service as any).accessTokenExpiredAt = Date.now() + 899_000;
+
+    try {
+      await expect(service.getAccessTokenResponse()).resolves.toEqual({
+        accessToken: 'token-123',
+        tokenType: 'BearerToken',
+        expiresIn: '899',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should resolve the BRI private key from the secrets directory when env is not set', () => {
     const original = process.env.BRI_PRIVATE_KEY;
     delete process.env.BRI_PRIVATE_KEY;

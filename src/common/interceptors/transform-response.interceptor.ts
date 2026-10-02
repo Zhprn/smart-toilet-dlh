@@ -8,12 +8,19 @@ import { Observable, map } from 'rxjs';
 import { ok } from '../utils/response.util';
 import { Reflector } from '@nestjs/core';
 import { SUCCESS_MESSAGE_KEY } from '../decorators/success-message.decorator';
+import { SKIP_RESPONSE_TRANSFORM_KEY } from '../decorators/skip-response-transform.decorator';
 
 @Injectable()
 export class TransformResponseInterceptor implements NestInterceptor {
   constructor(private readonly reflector: Reflector) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const skipTransform = this.reflector.get<boolean>(
+      SKIP_RESPONSE_TRANSFORM_KEY,
+      context.getHandler(),
+    );
+    if (skipTransform) return next.handle();
+
     const ctx = context.switchToHttp();
     const request = ctx.getRequest<Request>();
     const method = request?.method || 'GET';

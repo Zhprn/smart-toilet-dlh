@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
 import { BriService } from './bri.service';
 import { ApiBody, ApiOkResponse } from '@nestjs/swagger';
+import { SkipResponseTransform } from '../common/decorators/skip-response-transform.decorator';
 
 @Controller('bri')
 export class BriController {
@@ -16,11 +17,6 @@ export class BriController {
   })
   async generateQR(@Body('deviceCode') deviceCode?: string) {
     return this.briService.generateQR(deviceCode);
-  }
-
-  @Get('token')
-  getToken() {
-    return this.briService.getAccessToken();
   }
 
   @Post('inquiry')
@@ -53,7 +49,8 @@ export class BriWebhookController {
   }
 
   @Get('snap/v1.1/access-token/b2b')
+  @SkipResponseTransform()
   getAccessToken() {
-    return this.briService.getAccessToken();
+    return this.briService.getAccessTokenResponse();
   }
 }

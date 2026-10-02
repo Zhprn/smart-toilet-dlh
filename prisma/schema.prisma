@@ -55,9 +55,13 @@ model Transaction {
   status             Status
   qrContent          String
   terminalId         String
+  gateDeviceId       String?
   createdAt          DateTime  @default(now())
   paidAt             DateTime?
   expiredAt          DateTime?
+  gateDevice         GateDevices? @relation(fields: [gateDeviceId], references: [id], onDelete: Restrict)
+
+  @@index([gateDeviceId])
 }
 
 enum Status {
@@ -105,6 +109,7 @@ model GateDevices {
   status          String
   lastConnectedAt DateTime?
   createdAt       DateTime  @default(now())
+  transactions    Transaction[]
 }
 
 model AppSetting {

@@ -7,8 +7,15 @@ export class BriController {
   constructor(private readonly briService: BriService) {}
 
   @Post('generate-qr')
-  async generateQR() {
-    return this.briService.generateQR();
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: { deviceCode: { type: 'string', example: 'GATE-001' } },
+    },
+  })
+  async generateQR(@Body('deviceCode') deviceCode?: string) {
+    return this.briService.generateQR(deviceCode);
   }
 
   @Get('token')

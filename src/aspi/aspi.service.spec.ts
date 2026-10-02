@@ -24,7 +24,11 @@ describe('AspiService', () => {
     getQrAmount: jest.fn(),
   };
   const gateService = {
-    openGate: jest.fn(),
+    resolveDevice: jest
+      .fn()
+      .mockResolvedValue({ id: 'gate-device-1', deviceCode: 'GATE-001' }),
+    emitPaymentStatus: jest.fn(),
+    openGateForTransaction: jest.fn(),
   };
 
   beforeEach(() => {
@@ -144,6 +148,7 @@ describe('AspiService', () => {
       partnerReferenceNo: 'partner-1',
       transactionId: 'transaction-1',
       transactionStatus: 'PENDING',
+      gateDeviceCode: 'GATE-001',
     });
 
     const signatureRequest = mockedAxios.post.mock.calls[2][1];
@@ -167,6 +172,11 @@ describe('AspiService', () => {
     expect(signatureOptions.headers.AccessToken).toBe('token-1');
     expect(qrRequest).toEqual(signatureRequest);
     expect(JSON.stringify(qrRequest)).toBe(JSON.stringify(signatureRequest));
+    expect(prisma.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ gateDeviceId: 'gate-device-1' }),
+      }),
+    );
   });
 
   it.each([
@@ -206,7 +216,7 @@ describe('AspiService', () => {
         where: { partnerReferenceNo: 'partner-1' },
         data: { status: localStatus },
       });
-      expect(gateService.openGate).not.toHaveBeenCalled();
+      expect(gateService.openGateForTransaction).not.toHaveBeenCalled();
     },
   );
 

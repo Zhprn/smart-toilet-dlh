@@ -34,7 +34,6 @@ export class BriService {
 
   private readonly merchantId = process.env.BRI_MERCHANT_ID!;
   private readonly terminalId = process.env.BRI_TERMINAL_ID!;
-  private readonly gateDeviceCode = process.env.BRI_GATE_DEVICE_CODE!;
 
   private readonly privateKey = process.env.BRI_PRIVATE_KEY;
   private readonly webhookSecret = process.env.BRI_WEBHOOK_SECRET;
@@ -182,7 +181,8 @@ export class BriService {
   /**
    * Generate QR MPM Dynamic
    */
-  async generateQR() {
+  async generateQR(deviceCode?: string) {
+    const gateDevice = await this.gateService.resolveDevice(deviceCode);
     const endpoint = '/snap/v1.1/qr/qr-mpm-generate';
 
     const accessToken = await this.getAccessToken();
@@ -251,6 +251,7 @@ export class BriService {
         status: 'PENDING',
         qrContent,
         terminalId: this.terminalId,
+        gateDeviceId: gateDevice.id,
         expiredAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
@@ -259,6 +260,7 @@ export class BriService {
       ...responseData,
       transactionId: transaction.id,
       transactionStatus: transaction.status,
+      gateDeviceCode: gateDevice.deviceCode,
     };
   }
 
@@ -366,10 +368,9 @@ export class BriService {
         status: 'SUCCESS',
         amount: Number(updatedTransaction.amount).toFixed(2),
       });
-      await this.gateService.openGate(
-        this.gateDeviceCode,
+      await this.gateService.openGateForTransaction(
+        updatedTransaction.gateDeviceId,
         updatedTransaction.id,
-        'PAYMENT',
       );
     }
     return updatedTransaction;

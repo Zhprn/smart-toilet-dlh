@@ -29,9 +29,9 @@ describe('BriController', () => {
   });
 
   it('should call generateQR on the service', async () => {
-    await controller.generateQR();
+    await controller.generateQR('GATE-002');
 
-    expect(service.generateQR).toHaveBeenCalledWith();
+    expect(service.generateQR).toHaveBeenCalledWith('GATE-002');
   });
 
   it('should call payment on the service', async () => {

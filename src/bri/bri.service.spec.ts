@@ -62,6 +62,7 @@ describe('BriService', () => {
           amount: '2000.00',
           status: 'SUCCESS',
           terminalId: 'ABC123',
+          gateDeviceId: 'gate-1',
           id: 'txn-1',
         }),
       },
@@ -69,40 +70,28 @@ describe('BriService', () => {
 
     const gate = {
       emitPaymentStatus: jest.fn(),
-      openGate: jest.fn(),
+      openGateForTransaction: jest.fn(),
     };
 
-    const previousGateDeviceCode = process.env.BRI_GATE_DEVICE_CODE;
-    process.env.BRI_GATE_DEVICE_CODE = 'GATE-001';
+    const svc = new BriService(
+      prisma as any,
+      { getQrAmount: jest.fn() } as any,
+      gate as any,
+    );
 
-    try {
-      const svc = new BriService(
-        prisma as any,
-        { getQrAmount: jest.fn() } as any,
-        gate as any,
-      );
+    const secret = 'test-secret';
+    (svc as any).webhookSecret = secret;
+    const signature = crypto
+      .createHmac('sha512', secret)
+      .update(JSON.stringify(payload))
+      .digest('base64');
 
-      const secret = 'test-secret';
-      (svc as any).webhookSecret = secret;
-      const signature = crypto
-        .createHmac('sha512', secret)
-        .update(JSON.stringify(payload))
-        .digest('base64');
-
-      await expect(
-        svc.handleNotification(payload as any, signature),
-      ).resolves.toBeDefined();
-      expect(gate.openGate).toHaveBeenCalledWith(
-        'GATE-001',
-        'txn-1',
-        'PAYMENT',
-      );
-    } finally {
-      if (previousGateDeviceCode === undefined) {
-        delete process.env.BRI_GATE_DEVICE_CODE;
-      } else {
-        process.env.BRI_GATE_DEVICE_CODE = previousGateDeviceCode;
-      }
-    }
+    await expect(
+      svc.handleNotification(payload as any, signature),
+    ).resolves.toBeDefined();
+    expect(gate.openGateForTransaction).toHaveBeenCalledWith(
+      'gate-1',
+      'txn-1',
+    );
   });
 });

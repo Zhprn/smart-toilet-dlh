@@ -25,8 +25,15 @@ export class AspiController {
   }
 
   @Post('qr')
-  generateQr() {
-    return this.aspiService.generateQr();
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: { deviceCode: { type: 'string', example: 'GATE-001' } },
+    },
+  })
+  generateQr(@Body('deviceCode') deviceCode?: string) {
+    return this.aspiService.generateQr(deviceCode);
   }
 
   @Post('notify')

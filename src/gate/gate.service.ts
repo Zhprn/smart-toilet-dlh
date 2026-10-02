@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class GateService {
   private server?: Server;
+  private readonly defaultDeviceCode =
+    process.env.DEFAULT_GATE_DEVICE_CODE?.trim() || 'GATE-001';
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -57,6 +59,40 @@ export class GateService {
       status,
       lastConnectedAt: new Date().toISOString(),
     });
+  }
+
+  async resolveDevice(deviceCode?: string) {
+    const resolvedDeviceCode = deviceCode?.trim() || this.defaultDeviceCode;
+    const device = await this.prisma.gateDevices.findUnique({
+      where: { deviceCode: resolvedDeviceCode },
+      select: { id: true, deviceCode: true },
+    });
+
+    if (!device) {
+      throw new BadRequestException(
+        `Gate device "${resolvedDeviceCode}" is not registered`,
+      );
+    }
+
+    return device;
+  }
+
+  async openGateForTransaction(
+    gateDeviceId: string | null | undefined,
+    transactionId: string,
+  ) {
+    const device = gateDeviceId
+      ? await this.prisma.gateDevices.findUnique({
+          where: { id: gateDeviceId },
+          select: { deviceCode: true },
+        })
+      : null;
+
+    return this.openGate(
+      device?.deviceCode ?? this.defaultDeviceCode,
+      transactionId,
+      'PAYMENT',
+    );
   }
 
   emitPaymentStatus(payload: Record<string, unknown>) {

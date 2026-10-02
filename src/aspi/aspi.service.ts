@@ -163,7 +163,8 @@ export class AspiService {
     return response.data.signature;
   }
 
-  async generateQr() {
+  async generateQr(deviceCode?: string) {
+    const gateDevice = await this.gateService.resolveDevice(deviceCode);
     const baseUrl = this.requireConfig('ASPI_BASE_URL', this.baseUrl);
     const clientId = this.requireConfig('ASPI_CLIENT_ID', this.clientId);
     const accessToken = await this.getAccessToken();
@@ -233,6 +234,7 @@ export class AspiService {
         status: 'PENDING',
         qrContent,
         terminalId: requestBody.terminalId,
+        gateDeviceId: gateDevice.id,
         expiredAt: new Date(requestBody.validityPeriod),
       },
     });
@@ -241,6 +243,7 @@ export class AspiService {
       ...qrResponse,
       transactionId: transaction.id,
       transactionStatus: transaction.status,
+      gateDeviceCode: gateDevice.deviceCode,
     };
   }
 
@@ -301,10 +304,9 @@ export class AspiService {
         status: 'SUCCESS',
         amount: responseAmount,
       });
-      await this.gateService.openGate(
-        updatedTransaction.terminalId,
+      await this.gateService.openGateForTransaction(
+        updatedTransaction.gateDeviceId,
         updatedTransaction.id,
-        'PAYMENT',
       );
     }
 
@@ -360,10 +362,9 @@ export class AspiService {
         where: { partnerReferenceNo },
         data: { status: 'SUCCESS', paidAt: new Date() },
       });
-      await this.gateService.openGate(
-        updatedTransaction.terminalId,
+      await this.gateService.openGateForTransaction(
+        updatedTransaction.gateDeviceId,
         updatedTransaction.id,
-        'PAYMENT',
       );
     }
 
@@ -472,10 +473,9 @@ export class AspiService {
     });
 
     if (status === 'SUCCESS') {
-      await this.gateService.openGate(
-        transaction.terminalId,
+      await this.gateService.openGateForTransaction(
+        transaction.gateDeviceId,
         transaction.id,
-        'PAYMENT',
       );
     }
 

@@ -20,7 +20,9 @@ describe('GateService', () => {
   beforeEach(() => {
     prisma = {
       gateDevices: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'device-1' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'device-1', deviceCode: 'GATE-001' }),
       },
       gateOpenLog: {
         create: jest.fn().mockResolvedValue({ id: 'command-1' }),
@@ -58,6 +60,45 @@ describe('GateService', () => {
       deviceCode: 'GATE-001',
       durationMs: 1000,
     });
+  });
+
+  it('uses GATE-001 as the default and validates the selected device code', async () => {
+    await expect(service.resolveDevice()).resolves.toEqual({
+      id: 'device-1',
+      deviceCode: 'GATE-001',
+    });
+    expect(prisma.gateDevices.findUnique).toHaveBeenCalledWith({
+      where: { deviceCode: 'GATE-001' },
+      select: { id: true, deviceCode: true },
+    });
+
+    await service.resolveDevice('GATE-002');
+    expect(prisma.gateDevices.findUnique).toHaveBeenLastCalledWith({
+      where: { deviceCode: 'GATE-002' },
+      select: { id: true, deviceCode: true },
+    });
+  });
+
+  it('opens the gate associated with the transaction', async () => {
+    await expect(
+      service.openGateForTransaction('device-1', 'transaction-1'),
+    ).resolves.toBe(true);
+
+    expect(prisma.gateOpenLog.create).toHaveBeenCalledWith({
+      data: {
+        transactionId: 'transaction-1',
+        deviceCode: 'GATE-001',
+        source: 'PAYMENT',
+      },
+    });
+  });
+
+  it('rejects unregistered gate device codes', async () => {
+    prisma.gateDevices.findUnique.mockResolvedValueOnce(null);
+
+    await expect(service.resolveDevice('GATE-MISSING')).rejects.toThrow(
+      'Gate device "GATE-MISSING" is not registered',
+    );
   });
 
   it('records an offline device instead of reporting the command as sent', async () => {

@@ -41,6 +41,22 @@ describe('BriService', () => {
     }
   });
 
+  it('matches the vendor webhook body-hash and hex-ASCII examples', () => {
+    const rawBody =
+      '{"originalReferenceNo":"648681020722","originalPartnerReferenceNo":"000008526196","latestTransactionStatus":"00","transactionStatusDesc":"success","customerNumber":"9360000213214291591","accountType":"Unspecified Acct","destinationAccountName":"LAILI SEPTIAN ZUFRI YAHYA","amount":{"value":"5000.00","currency":"IDR"},"bankCode":"002","AdditionalInfo":{"ReffId":"2004429726","issuerName":"BRI","issuerRrn":"296259544768"}}';
+    const bodyHash = crypto
+      .createHash('sha256')
+      .update(rawBody)
+      .digest('hex');
+
+    expect(bodyHash).toBe(
+      '35db209a558de1f69c240b9202d99d9995fdfb9a52f0193b2abfe46f208b525f',
+    );
+    expect(Buffer.from(bodyHash, 'utf8').toString('hex')).toBe(
+      '33356462323039613535386465316636396332343062393230326439396439393935666466623961353266303139336232616266653436663230386235323566',
+    );
+  });
+
   it('should resolve the BRI private key from the secrets directory when env is not set', () => {
     const original = process.env.BRI_PRIVATE_KEY;
     delete process.env.BRI_PRIVATE_KEY;
@@ -97,13 +113,26 @@ describe('BriService', () => {
 
     const secret = 'test-secret';
     (svc as any).webhookSecret = secret;
+    const timestamp = '2026-10-02T15:32:22+07:00';
+    const accessToken = 'test-access-token';
+    const rawBody = Buffer.from(JSON.stringify(payload));
+    const bodyHash = crypto
+      .createHash('sha256')
+      .update(rawBody)
+      .digest('hex');
+    const bodyHashAscii = Buffer.from(bodyHash, 'utf8').toString('hex');
+    const stringToSign = `POST:/v1.1/qr-dynamic/qr-mpm-notify:${accessToken}:${bodyHashAscii}:${timestamp}`;
     const signature = crypto
       .createHmac('sha512', secret)
-      .update(JSON.stringify(payload))
+      .update(stringToSign)
       .digest('base64');
 
     await expect(
-      svc.handleNotification(payload as any, signature),
+      svc.handleNotification(payload as any, signature, {
+        rawBody,
+        timestamp,
+        authorization: `Bearer ${accessToken}`,
+      }),
     ).resolves.toBeDefined();
     expect(gate.openGateForTransaction).toHaveBeenCalledWith(
       'gate-1',

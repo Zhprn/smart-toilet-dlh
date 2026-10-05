@@ -1,4 +1,12 @@
-import { Body, Controller, Headers, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  Req,
+} from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { BriService } from './bri.service';
 import { ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { SkipResponseTransform } from '../common/decorators/skip-response-transform.decorator';
@@ -43,9 +51,23 @@ export class BriWebhookController {
   @Post('v1.1/qr-dynamic/qr-mpm-notify')
   notify(
     @Body() body: Record<string, unknown>,
+    @Req() request: RawBodyRequest<Request>,
     @Headers('x-signature') signature?: string,
+    @Headers('x-timestamp') timestamp?: string,
+    @Headers('authorization') authorization?: string,
   ) {
-    return this.briService.handleNotification(body, signature);
+    console.log({
+      hasRawBody: !!request.rawBody,
+      rawBodyLength: request.rawBody?.length,
+      hasSignature: !!signature,
+      hasTimestamp: !!timestamp,
+      hasAuthorization: !!authorization,
+    });
+    return this.briService.handleNotification(body, signature, {
+      rawBody: request.rawBody,
+      timestamp,
+      authorization,
+    });
   }
 
   @Post('snap/v1.1/access-token/b2b')

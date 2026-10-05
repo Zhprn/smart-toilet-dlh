@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import axios from 'axios';
 import * as crypto from 'crypto';
@@ -37,6 +38,8 @@ export class BriService {
 
   private readonly privateKey = process.env.BRI_PRIVATE_KEY;
   private readonly webhookSecret = process.env.BRI_WEBHOOK_SECRET;
+
+  private readonly logger = new Logger(BriService.name);
 
   resolvePrivateKey(): string {
     const configuredKey = this.privateKey?.trim();
@@ -320,8 +323,13 @@ export class BriService {
   async handleNotification(
     payload: Record<string, unknown>,
     signature?: string,
+    requestInfo: {
+      rawBody?: Buffer;
+      timestamp?: string;
+      authorization?: string;
+    } = {},
   ) {
-    this.verifyWebhookSignature(payload, signature);
+    this.verifyWebhookSignature(signature, requestInfo);
 
     const partnerReferenceNo =
       this.getString(payload, 'originalPartnerReferenceNo') ??
@@ -389,8 +397,12 @@ export class BriService {
   }
 
   private verifyWebhookSignature(
-    payload: Record<string, unknown>,
-    signature?: string,
+    signature: string | undefined,
+    requestInfo: {
+      rawBody?: Buffer;
+      timestamp?: string;
+      authorization?: string;
+    },
   ) {
     const secretCandidates = [this.webhookSecret, this.clientSecret].filter(
       (secret): secret is string => typeof secret === 'string' && secret.length > 0,
@@ -405,48 +417,47 @@ export class BriService {
       throw new UnauthorizedException('BRI webhook signature is required');
     }
 
-    const payloadVariants = [
-      JSON.stringify(payload),
-      this.canonicalJson(payload),
-    ];
+    const timestamp = requestInfo.timestamp?.trim();
+    const accessToken = requestInfo.authorization
+      ?.replace(/^Bearer\s+/i, '')
+      .trim();
+    if (!timestamp || !accessToken) {
+      throw new UnauthorizedException(
+        'BRI webhook timestamp and bearer token are required',
+      );
+    }
 
-    const receivedBuffer = Buffer.from(signature);
+    const body = requestInfo.rawBody?.toString('utf8');
+    if (body === undefined) {
+      throw new UnauthorizedException('BRI webhook raw body is unavailable');
+    }
+
+    const bodyHash = crypto.createHash('sha256').update(body).digest('hex');
+    const bodyHashAscii = Buffer.from(bodyHash, 'utf8').toString('hex');
+    const stringToSign = `POST:/v1.1/qr-dynamic/qr-mpm-notify:${accessToken}:${bodyHashAscii}:${timestamp}`;
+    this.logger.debug({
+      rawBodyLength: requestInfo.rawBody?.length,
+      bodyHash,
+      bodyHashAscii,
+      stringToSign,
+    });
+    const receivedBuffer = Buffer.from(signature, 'base64');
 
     for (const secret of secretCandidates) {
-      for (const variant of payloadVariants) {
-        const expected = crypto
-          .createHmac('sha512', secret)
-          .update(variant)
-          .digest('base64');
-        const expectedBuffer = Buffer.from(expected);
+      const expectedBuffer = crypto
+        .createHmac('sha512', secret)
+        .update(stringToSign)
+        .digest();
 
-        if (
-          expectedBuffer.length === receivedBuffer.length &&
-          crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
-        ) {
-          return;
-        }
+      if (
+        expectedBuffer.length === receivedBuffer.length &&
+        crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+      ) {
+        return;
       }
     }
 
     throw new UnauthorizedException('Invalid BRI webhook signature');
-  }
-
-  private canonicalJson(value: unknown): string {
-    if (Array.isArray(value)) {
-      return `[${value.map((item) => this.canonicalJson(item)).join(',')}]`;
-    }
-
-    if (value && typeof value === 'object') {
-      const entries = Object.entries(value as Record<string, unknown>).sort(
-        ([left], [right]) => left.localeCompare(right),
-      );
-      return `{${entries
-        .map(([key, item]) => `${JSON.stringify(key)}:${this.canonicalJson(item)}`)
-        .join(',')}}`;
-    }
-
-    return JSON.stringify(value);
   }
 
   private buildTransactionHeaders(

@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  app:
+    container_name: gate-qris-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./logs:/var/log/gate-qris
+      - ./secrets:/usr/src/app/secrets:ro
+    restart: unless-stopped

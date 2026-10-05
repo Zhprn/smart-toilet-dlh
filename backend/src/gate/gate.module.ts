@@ -1,0 +1,22 @@
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PrismaModule } from '../prisma/prisma.module';
+import { GateGateway } from './gate.gateway';
+import { GateService } from './gate.service';
+
+@Module({
+  imports: [
+    PrismaModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
+      }),
+    }),
+  ],
+  providers: [GateGateway, GateService],
+  exports: [GateService],
+})
+export class GateModule {}

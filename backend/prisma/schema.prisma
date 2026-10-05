@@ -1,0 +1,119 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+}
+
+model User {
+  id        String           @id @default(uuid())
+  email     String           @unique
+  password  String
+  name      String
+  address   String?
+  role      UserRole         @default(ADMIN)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+  blackList TokenBlacklist[]
+}
+
+model TokenBlacklist {
+  id        String   @id @default(uuid())
+  token     String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginAttemptBucket {
+  key             String   @id
+  count           Int      @default(0)
+  windowStartedAt DateTime @default(now())
+}
+
+model Transaction {
+  id                 String    @id @default(uuid())
+  partnerReferenceNo String    @unique
+  externalId         String?
+  referenceNo        String    @unique
+  amount             Decimal   @db.Decimal(10, 2)
+  status             Status
+  qrContent          String
+  terminalId         String
+  gateDeviceId       String?
+  createdAt          DateTime  @default(now())
+  paidAt             DateTime?
+  expiredAt          DateTime?
+  gateDevice         GateDevices? @relation(fields: [gateDeviceId], references: [id], onDelete: Restrict)
+
+  @@index([gateDeviceId])
+}
+
+enum Status {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum GateOpenSource {
+  PAYMENT
+  MANUAL
+}
+
+enum GateOpenStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DEVICE_NOT_FOUND
+  DEVICE_OFFLINE
+  SERVER_UNAVAILABLE
+}
+
+model GateOpenLog {
+  id             String         @id @default(uuid())
+  transactionId  String
+  deviceCode     String
+  source         GateOpenSource
+  status         GateOpenStatus @default(PENDING)
+  error          String?
+  createdAt      DateTime       @default(now())
+  acknowledgedAt DateTime?
+
+  @@index([createdAt])
+  @@index([deviceCode, createdAt])
+  @@index([transactionId])
+}
+
+model GateDevices {
+  id              String    @id @default(uuid())
+  name            String
+  deviceCode      String    @unique
+  authToken       String    @unique @default(uuid())
+  status          String
+  lastConnectedAt DateTime?
+  createdAt       DateTime  @default(now())
+  transactions    Transaction[]
+}
+
+model AppSetting {
+  key       String   @id
+  value     Decimal  @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt
+}
